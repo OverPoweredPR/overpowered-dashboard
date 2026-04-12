@@ -158,11 +158,90 @@ export type RunAuditoriaResult = {
   job_id?: string
 }
 
+// ── Inventario types ──────────────────────────────────────────────────────────
+
+export type ProductoInventario = {
+  id: string
+  nombre: string
+  sku?: string
+  stock_actual: number
+  stock_minimo: number
+  unidad: string
+  estado: 'ok' | 'critico' | 'agotado'
+  ultima_actualizacion: string
+}
+
+export type InventarioData = {
+  generado_en: string
+  resumen: { total: number; criticos: number; agotados: number; discrepancias: number }
+  productos: ProductoInventario[]
+}
+
+// ── Compras types ─────────────────────────────────────────────────────────────
+
+export type OrdenCompra = {
+  id: string
+  proveedor: string
+  items: number
+  total: number
+  status: 'borrador' | 'enviada' | 'recibida' | 'cancelada'
+  creada_en: string
+  esperada_en?: string
+}
+
+export type ComprasData = {
+  generado_en: string
+  resumen: { total: number; pendientes: number; recibidas_hoy: number }
+  ordenes: OrdenCompra[]
+}
+
+// ── Facturas types ────────────────────────────────────────────────────────────
+
+export type Factura = {
+  id: string
+  numero: string
+  cliente: string
+  monto: number
+  status: 'borrador' | 'emitida' | 'pagada' | 'vencida' | 'cancelada'
+  emitida_en: string
+  vence_en?: string
+  factura_url?: string
+}
+
+export type FacturasData = {
+  generado_en: string
+  resumen: { total: number; pendientes: number; pagadas_hoy: number; vencidas: number }
+  facturas: Factura[]
+}
+
+// ── Resoluciones types ────────────────────────────────────────────────────────
+
+export type Resolucion = {
+  id: string
+  titulo: string
+  descripcion: string
+  status: 'abierta' | 'en_progreso' | 'resuelta' | 'cerrada'
+  prioridad: 'alta' | 'media' | 'baja'
+  creada_en: string
+  resuelta_en?: string
+  asignada_a?: string
+}
+
+export type ResolucionesData = {
+  generado_en: string
+  resumen: { total: number; abiertas: number; en_progreso: number; resueltas_hoy: number }
+  resoluciones: Resolucion[]
+}
+
 export const api = {
-  home:      () => fetcher<HomeData>('/home'),
-  ordenes:   () => fetcher<OrdenesData>('/ordenes'),
-  pagos:     () => fetcher<PagosData>('/pagos'),
-  auditoria: () => fetcher<AuditoriaData>('/auditoria'),
+  home:         () => fetcher<HomeData>('/home'),
+  ordenes:      () => fetcher<OrdenesData>('/ordenes'),
+  pagos:        () => fetcher<PagosData>('/pagos'),
+  auditoria:    () => fetcher<AuditoriaData>('/auditoria'),
+  inventario:   () => fetcher<InventarioData>('/inventario'),
+  compras:      () => fetcher<ComprasData>('/compras'),
+  facturas:     () => fetcher<FacturasData>('/facturas'),
+  resoluciones: () => fetcher<ResolucionesData>('/resoluciones'),
   runAuditoria: (pin: string) =>
     fetcher<RunAuditoriaResult>('/auditoria/run', {
       method: 'POST',
