@@ -1,626 +1,306 @@
-'use client'
+import { useState, useEffect } from "react";
+import { DashboardLayout } from "@/components/DashboardLayout";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { TableSkeleton } from "@/components/Skeletons";
+import { EmptyState } from "@/components/EmptyState";
+import { FileText, Search, Eye, Send, Download, CalendarIcon, DollarSign, AlertTriangle, Mail, Clock } from "lucide-react";
+import { format } from "date-fns";
+import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
-import { useState } from 'react'
-import {
-  FileText,
-  ExternalLink,
-  RefreshCw,
-  Loader2,
-  CheckCircle,
-  AlertTriangle,
-  XCircle,
-  Clock,
-  Send,
-  Users,
-  ChevronDown,
-  ChevronUp,
-} from 'lucide-react'
+type DocType = "factura" | "recibo" | "estado_cuenta" | "aviso_cobro";
+type DocStatus = "enviada" | "vista" | "pendiente" | "vencida";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-type InvoiceType = 'order' | 'payment' | 'statement' | 'collections' | 'moratoria'
-
-type Factura = {
-  id: string
-  invoice_id: string
-  tipo: InvoiceType
-  cliente: string
-  fecha: string
-  monto: number
-  drive_url: string
-  reenviada: boolean
+interface Invoice {
+  id: string;
+  client: string;
+  email: string;
+  type: DocType;
+  amount: number;
+  date: string;
+  status: DocStatus;
 }
 
-type AgingBucket = '0-30' | '31-60' | '61-90' | '90+'
-type ClienteSemaforo = 'verde' | 'amarillo' | 'rojo'
+const typeLabel: Record<DocType, string> = { factura: "Factura", recibo: "Recibo", estado_cuenta: "Estado de Cuenta", aviso_cobro: "Aviso de Cobro" };
+const typeStyle: Record<DocType, string> = {
+  factura: "bg-info/10 text-info border-info/30",
+  recibo: "bg-success/10 text-success border-success/30",
+  estado_cuenta: "bg-purple-500/15 text-purple-400 border-purple-500/30",
+  aviso_cobro: "bg-warning/10 text-warning border-warning/30",
+};
+const statusStyle: Record<DocStatus, string> = {
+  enviada: "bg-info/10 text-info border-info/30",
+  vista: "bg-success/10 text-success border-success/30",
+  pendiente: "bg-warning/10 text-warning border-warning/30",
+  vencida: "bg-destructive/10 text-destructive border-destructive/30",
+};
+const statusLabel: Record<DocStatus, string> = { enviada: "Enviada", vista: "Vista", pendiente: "Pendiente", vencida: "Vencida" };
 
-type ClienteCobranza = {
-  id: string
-  nombre: string
-  email: string
-  balance: number
-  aging: Record<AgingBucket, number>
-  semaforo: ClienteSemaforo
-  ultima_factura: string
-}
+const initialInvoices: Invoice[] = [
+  { id: "INV-450", client: "Hotel San Juan", email: "cuentas@hotelsanjuan.com", type: "factura", amount: 520, date: "2026-04-10", status: "pendiente" },
+  { id: "INV-449", client: "Restaurante El Coquí", email: "pagos@elcoqui.com", type: "factura", amount: 245, date: "2026-04-08", status: "vencida" },
+  { id: "REC-112", client: "Café La Plaza", email: "admin@cafelaplaza.com", type: "recibo", amount: 178.50, date: "2026-04-05", status: "vista" },
+  { id: "INV-447", client: "Deli Boricua", email: "contabilidad@deliboricua.com", type: "factura", amount: 350, date: "2026-04-03", status: "vencida" },
+  { id: "STMT-030", client: "Bistro 787", email: "finance@bistro787.com", type: "estado_cuenta", amount: 1420, date: "2026-04-01", status: "enviada" },
+  { id: "COL-015", client: "Restaurante El Coquí", email: "pagos@elcoqui.com", type: "aviso_cobro", amount: 595, date: "2026-04-11", status: "enviada" },
+  { id: "REC-111", client: "Panadería Express", email: "info@panaderiaexpress.com", type: "recibo", amount: 198, date: "2026-03-28", status: "vista" },
+  { id: "INV-446", client: "Bistro 787", email: "finance@bistro787.com", type: "factura", amount: 420, date: "2026-03-28", status: "enviada" },
+  { id: "COL-014", client: "Deli Boricua", email: "contabilidad@deliboricua.com", type: "aviso_cobro", amount: 350, date: "2026-04-12", status: "pendiente" },
+  { id: "STMT-029", client: "Hotel San Juan", email: "cuentas@hotelsanjuan.com", type: "estado_cuenta", amount: 2340, date: "2026-03-31", status: "vista" },
+];
 
-// ─── Static mock data ─────────────────────────────────────────────────────────
+const tabFilters: { value: string; label: string; type?: DocType }[] = [
+  { value: "todas", label: "Todas" },
+  { value: "factura", label: "Facturas", type: "factura" },
+  { value: "recibo", label: "Recibos", type: "recibo" },
+  { value: "estado_cuenta", label: "Estados de Cuenta", type: "estado_cuenta" },
+  { value: "aviso_cobro", label: "Avisos de Cobro", type: "aviso_cobro" },
+];
 
-const FACTURAS_MOCK: Factura[] = [
-  { id: 'f1',  invoice_id: 'INV-1041', tipo: 'order',       cliente: 'Restaurante El Mofongo',   fecha: '2026-04-12', monto: 845.00,  drive_url: '#', reenviada: false },
-  { id: 'f2',  invoice_id: 'INV-1040', tipo: 'payment',     cliente: 'Café Borinquen',            fecha: '2026-04-11', monto: 320.50,  drive_url: '#', reenviada: true  },
-  { id: 'f3',  invoice_id: 'INV-1039', tipo: 'order',       cliente: 'Panadería La Reina',        fecha: '2026-04-10', monto: 1230.00, drive_url: '#', reenviada: false },
-  { id: 'f4',  invoice_id: 'STMT-043', tipo: 'statement',   cliente: 'Hotel Condado Beach',       fecha: '2026-04-01', monto: 4500.00, drive_url: '#', reenviada: false },
-  { id: 'f5',  invoice_id: 'COB-021',  tipo: 'collections', cliente: 'Colmado Don Pepe',          fecha: '2026-03-28', monto: 680.75,  drive_url: '#', reenviada: true  },
-  { id: 'f6',  invoice_id: 'MOR-008',  tipo: 'moratoria',   cliente: 'Restaurante El Mofongo',   fecha: '2026-03-20', monto: 1200.00, drive_url: '#', reenviada: false },
-  { id: 'f7',  invoice_id: 'INV-1038', tipo: 'order',       cliente: 'Supermercado La Familia',  fecha: '2026-04-09', monto: 2100.00, drive_url: '#', reenviada: false },
-  { id: 'f8',  invoice_id: 'PAY-055',  tipo: 'payment',     cliente: 'Café Borinquen',            fecha: '2026-04-08', monto: 320.50,  drive_url: '#', reenviada: false },
-]
+export default function Facturas() {
+  const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState("todas");
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [dateFrom, setDateFrom] = useState<Date | undefined>();
+  const [dateTo, setDateTo] = useState<Date | undefined>();
 
-const CLIENTES_MOCK: ClienteCobranza[] = [
-  {
-    id: 'c1', nombre: 'Restaurante El Mofongo', email: 'pagos@elmofongo.pr',
-    balance: 2045.00, aging: { '0-30': 845.00, '31-60': 1200.00, '61-90': 0, '90+': 0 },
-    semaforo: 'amarillo', ultima_factura: '2026-04-12',
-  },
-  {
-    id: 'c2', nombre: 'Hotel Condado Beach', email: 'cuentas@condadobeach.pr',
-    balance: 8750.00, aging: { '0-30': 4500.00, '31-60': 2500.00, '61-90': 1750.00, '90+': 0 },
-    semaforo: 'rojo', ultima_factura: '2026-04-01',
-  },
-  {
-    id: 'c3', nombre: 'Colmado Don Pepe', email: 'donpepe@gmail.com',
-    balance: 680.75, aging: { '0-30': 0, '31-60': 680.75, '61-90': 0, '90+': 0 },
-    semaforo: 'amarillo', ultima_factura: '2026-03-28',
-  },
-  {
-    id: 'c4', nombre: 'Panadería La Reina', email: 'lareina@example.pr',
-    balance: 1230.00, aging: { '0-30': 1230.00, '31-60': 0, '61-90': 0, '90+': 0 },
-    semaforo: 'verde', ultima_factura: '2026-04-10',
-  },
-  {
-    id: 'c5', nombre: 'Supermercado La Familia', email: 'pagos@lafamilia.pr',
-    balance: 3400.00, aging: { '0-30': 2100.00, '31-60': 800.00, '61-90': 500.00, '90+': 0 },
-    semaforo: 'amarillo', ultima_factura: '2026-04-09',
-  },
-  {
-    id: 'c6', nombre: 'Café Borinquen', email: 'contabilidad@cafeborinquen.pr',
-    balance: 0, aging: { '0-30': 0, '31-60': 0, '61-90': 0, '90+': 0 },
-    semaforo: 'verde', ultima_factura: '2026-04-11',
-  },
-]
+  // Modals
+  const [previewDoc, setPreviewDoc] = useState<Invoice | null>(null);
+  const [resendDoc, setResendDoc] = useState<Invoice | null>(null);
+  const [resendEmail, setResendEmail] = useState("");
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+  useEffect(() => { const t = setTimeout(() => setLoading(false), 500); return () => clearTimeout(t); }, []);
 
-function fmt(n: number) {
-  return `$${n.toLocaleString('es-PR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-}
+  const filtered = initialInvoices
+    .filter((inv) => tab === "todas" || inv.type === tab)
+    .filter((inv) => statusFilter === "all" || inv.status === statusFilter)
+    .filter((inv) => !search || inv.id.toLowerCase().includes(search.toLowerCase()) || inv.client.toLowerCase().includes(search.toLowerCase()))
+    .filter((inv) => {
+      if (dateFrom && new Date(inv.date) < dateFrom) return false;
+      if (dateTo && new Date(inv.date) > dateTo) return false;
+      return true;
+    });
 
-// ─── Invoice type badge ───────────────────────────────────────────────────────
+  const totalFacturado = initialInvoices.reduce((s, i) => s + i.amount, 0);
+  const pendienteCobro = initialInvoices.filter((i) => i.status === "pendiente").reduce((s, i) => s + i.amount, 0);
+  const vencidasTotal = initialInvoices.filter((i) => i.status === "vencida").reduce((s, i) => s + i.amount, 0);
+  const enviadasHoy = initialInvoices.filter((i) => i.date === "2026-04-12").length;
 
-const TIPO_CONFIG: Record<InvoiceType, { label: string; className: string }> = {
-  order:       { label: 'Orden',       className: 'bg-blue-100   text-blue-700'   },
-  payment:     { label: 'Pago',        className: 'bg-emerald-100 text-emerald-700' },
-  statement:   { label: 'Estado Cta.', className: 'bg-purple-100 text-purple-700' },
-  collections: { label: 'Cobro',       className: 'bg-amber-100  text-amber-700'  },
-  moratoria:   { label: 'Moratoria',   className: 'bg-red-100    text-red-700'    },
-}
+  const openResend = (inv: Invoice) => {
+    setResendDoc(inv);
+    setResendEmail(inv.email);
+  };
 
-function TipoBadge({ tipo }: { tipo: InvoiceType }) {
-  const cfg = TIPO_CONFIG[tipo]
-  return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${cfg.className}`}>
-      {cfg.label}
-    </span>
-  )
-}
+  const confirmResend = () => {
+    if (!resendDoc || !resendEmail) return;
+    toast.success(`${resendDoc.id} reenviada a ${resendEmail}`);
+    setResendDoc(null);
+  };
 
-// ─── Semáforo cobranza ────────────────────────────────────────────────────────
-
-function SemaforoCobranza({ status }: { status: ClienteSemaforo }) {
-  const cfg = {
-    verde:    { icon: <CheckCircle   size={14} className="text-emerald-500" />, label: 'Al día'  },
-    amarillo: { icon: <AlertTriangle size={14} className="text-amber-500"   />, label: 'Pendiente' },
-    rojo:     { icon: <XCircle       size={14} className="text-red-500"     />, label: 'Vencido' },
-  }[status]
-  return (
-    <span className="inline-flex items-center gap-1 text-xs font-medium text-slate-600">
-      {cfg.icon}{cfg.label}
-    </span>
-  )
-}
-
-// ─── Reenviar button ──────────────────────────────────────────────────────────
-
-function ReenviarButton({ factura }: { factura: Factura }) {
-  const [loading,   setLoading]   = useState(false)
-  const [done,      setDone]      = useState(factura.reenviada)
-  const [error,     setError]     = useState<string | null>(null)
-
-  const handleReenviar = async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      const res = await fetch('/api/dashboard/facturar', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          invoice_type:  factura.tipo,
-          invoice_id:    factura.invoice_id,
-          customer_name: factura.cliente,
-          total:         factura.monto.toFixed(2),
-          notes:         'Reenvío desde dashboard',
-        }),
-      })
-      if (!res.ok) {
-        const d = await res.json()
-        throw new Error(d.error ?? `HTTP ${res.status}`)
-      }
-      setDone(true)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Error')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  if (done) {
-    return (
-      <span className="inline-flex items-center gap-1 text-xs text-emerald-600 font-medium">
-        <CheckCircle size={12} /> Enviado
-      </span>
-    )
-  }
+  const stats = [
+    { label: "Total Facturado", value: `$${totalFacturado.toLocaleString("en-US", { minimumFractionDigits: 2 })}`, icon: DollarSign, color: "text-foreground" },
+    { label: "Pendiente Cobro", value: `$${pendienteCobro.toLocaleString("en-US", { minimumFractionDigits: 2 })}`, icon: Clock, color: "text-warning" },
+    { label: "Vencidas", value: `$${vencidasTotal.toLocaleString("en-US", { minimumFractionDigits: 2 })}`, icon: AlertTriangle, color: "text-destructive" },
+    { label: "Enviadas Hoy", value: enviadasHoy.toString(), icon: Mail, color: "text-info" },
+  ];
 
   return (
-    <div className="flex flex-col items-end gap-0.5">
-      <button
-        onClick={handleReenviar}
-        disabled={loading}
-        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md
-          bg-indigo-50 text-indigo-700 border border-indigo-200
-          hover:bg-indigo-100 disabled:opacity-40 transition-colors"
-      >
-        {loading ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
-        {loading ? 'Enviando…' : 'Reenviar'}
-      </button>
-      {error && <span className="text-xs text-red-500">{error}</span>}
-    </div>
-  )
-}
-
-// ─── Generar cobro button ─────────────────────────────────────────────────────
-
-function GenerarCobroButton({
-  cliente,
-  tipo,
-  onDone,
-}: {
-  cliente: ClienteCobranza
-  tipo: 'collections' | 'moratoria'
-  onDone: () => void
-}) {
-  const [loading, setLoading] = useState(false)
-  const [done,    setDone]    = useState(false)
-  const [error,   setError]   = useState<string | null>(null)
-
-  const handleGenerar = async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      const res = await fetch('/api/dashboard/facturar', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          invoice_type:   tipo,
-          invoice_id:     `${tipo.toUpperCase().slice(0, 3)}-${Date.now()}`,
-          customer_name:  cliente.nombre,
-          customer_email: cliente.email,
-          total:          cliente.balance.toFixed(2),
-        }),
-      })
-      const d = await res.json()
-      if (!res.ok) throw new Error(d.error ?? `HTTP ${res.status}`)
-      setDone(true)
-      onDone()
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Error')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  if (done) {
-    return (
-      <span className="inline-flex items-center gap-1 text-xs text-emerald-600 font-medium">
-        <CheckCircle size={12} /> Generado
-      </span>
-    )
-  }
-
-  const label = tipo === 'moratoria' ? 'Moratoria' : 'Cobro'
-  const colorClass = tipo === 'moratoria'
-    ? 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100'
-    : 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
-
-  return (
-    <div className="flex flex-col items-end gap-0.5">
-      <button
-        onClick={handleGenerar}
-        disabled={loading || cliente.balance === 0}
-        className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md
-          border disabled:opacity-40 transition-colors ${colorClass}`}
-      >
-        {loading ? <Loader2 size={12} className="animate-spin" /> : <FileText size={12} />}
-        {loading ? 'Generando…' : `Generar ${label}`}
-      </button>
-      {error && <span className="text-xs text-red-500">{error}</span>}
-    </div>
-  )
-}
-
-// ─── Aging bar ────────────────────────────────────────────────────────────────
-
-function AgingBar({ aging, total }: { aging: Record<AgingBucket, number>; total: number }) {
-  if (total === 0) return <span className="text-xs text-slate-400">—</span>
-
-  const buckets: { key: AgingBucket; color: string }[] = [
-    { key: '0-30',  color: 'bg-emerald-400' },
-    { key: '31-60', color: 'bg-amber-400'   },
-    { key: '61-90', color: 'bg-orange-500'  },
-    { key: '90+',   color: 'bg-red-600'     },
-  ]
-
-  return (
-    <div className="space-y-1 min-w-[120px]">
-      <div className="flex h-1.5 rounded-full overflow-hidden bg-slate-100">
-        {buckets.map(({ key, color }) => {
-          const pct = total > 0 ? (aging[key] / total) * 100 : 0
-          return pct > 0 ? (
-            <div key={key} className={`${color} h-full`} style={{ width: `${pct}%` }} />
-          ) : null
-        })}
-      </div>
-      <div className="flex gap-2 flex-wrap">
-        {buckets.map(({ key, color }) =>
-          aging[key] > 0 ? (
-            <span key={key} className="text-xs text-slate-500">
-              <span className={`inline-block w-1.5 h-1.5 rounded-full ${color} mr-0.5 align-middle`} />
-              {key}d: {fmt(aging[key])}
-            </span>
-          ) : null
-        )}
-      </div>
-    </div>
-  )
-}
-
-// ─── Tab: Facturas ────────────────────────────────────────────────────────────
-
-function FacturasTab() {
-  const [tipoFilter, setTipoFilter] = useState<InvoiceType | 'todas'>('todas')
-  const [facturas,   setFacturas]   = useState<Factura[]>(FACTURAS_MOCK)
-
-  const tipos: { key: InvoiceType | 'todas'; label: string }[] = [
-    { key: 'todas',       label: 'Todas'       },
-    { key: 'order',       label: 'Órdenes'     },
-    { key: 'payment',     label: 'Pagos'       },
-    { key: 'statement',   label: 'Est. Cuenta' },
-    { key: 'collections', label: 'Cobros'      },
-    { key: 'moratoria',   label: 'Moratoria'   },
-  ]
-
-  const filtered = tipoFilter === 'todas'
-    ? facturas
-    : facturas.filter((f) => f.tipo === tipoFilter)
-
-  return (
-    <div className="space-y-4">
-      {/* Filter pills */}
-      <div className="flex gap-1 flex-wrap">
-        {tipos.map((t) => (
-          <button
-            key={t.key}
-            onClick={() => setTipoFilter(t.key)}
-            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors
-              ${tipoFilter === t.key
-                ? 'bg-indigo-600 text-white'
-                : 'bg-white border border-slate-200 text-slate-600 hover:border-indigo-300'}`}
-          >
-            {t.label}
-            {t.key !== 'todas' && (
-              <span className="ml-1 opacity-70">
-                ({facturas.filter((f) => f.tipo === t.key).length})
-              </span>
-            )}
-          </button>
-        ))}
-      </div>
-
-      {/* Table */}
-      <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 border-b border-slate-200">
-              <tr>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">ID</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Tipo</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Cliente</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Fecha</th>
-                <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Monto</th>
-                <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-slate-500">PDF</th>
-                <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Acción</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {filtered.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-sm text-slate-400">
-                    No hay facturas con ese filtro
-                  </td>
-                </tr>
-              ) : (
-                filtered.map((f) => (
-                  <tr key={f.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-4 py-3 font-mono text-xs font-bold text-slate-700">{f.invoice_id}</td>
-                    <td className="px-4 py-3"><TipoBadge tipo={f.tipo} /></td>
-                    <td className="px-4 py-3 text-slate-700">{f.cliente}</td>
-                    <td className="px-4 py-3 text-xs text-slate-400 whitespace-nowrap">{f.fecha}</td>
-                    <td className="px-4 py-3 text-right font-semibold text-slate-800">{fmt(f.monto)}</td>
-                    <td className="px-4 py-3 text-center">
-                      <a
-                        href={f.drive_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 font-medium"
-                      >
-                        <ExternalLink size={12} />
-                        Drive
-                      </a>
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <ReenviarButton factura={f} />
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+    <DashboardLayout>
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="animate-fade-in">
+          <h1 className="text-2xl font-bold">Facturas & Recibos</h1>
+          <p className="text-sm text-muted-foreground">Documentos de facturación, recibos y cobranzas</p>
         </div>
-        <div className="px-4 py-3 border-t border-slate-100 bg-slate-50 flex justify-between">
-          <p className="text-xs text-slate-400">
-            {filtered.length} de {facturas.length} facturas
-          </p>
-          <p className="text-xs text-slate-400">
-            Total: <span className="font-semibold text-slate-700">
-              {fmt(filtered.reduce((s, f) => s + f.monto, 0))}
-            </span>
-          </p>
+
+        {/* Stats */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 animate-fade-in">
+          {stats.map((s, i) => (
+            <Card key={s.label} className="hover:shadow-md transition-all" style={{ animationDelay: `${i * 60}ms` }}>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between mb-1">
+                  <s.icon className={`w-4 h-4 ${s.color}`} />
+                </div>
+                <p className={`text-xl font-bold ${s.color}`}>{s.value}</p>
+                <p className="text-xs text-muted-foreground">{s.label}</p>
+              </CardContent>
+            </Card>
+          ))}
         </div>
-      </div>
-    </div>
-  )
-}
 
-// ─── Tab: Cobranza ────────────────────────────────────────────────────────────
+        {/* Tabs */}
+        <Tabs value={tab} onValueChange={setTab} className="animate-fade-in">
+          <TabsList className="w-full justify-start overflow-x-auto flex-nowrap">
+            {tabFilters.map((t) => (
+              <TabsTrigger key={t.value} value={t.value} className="text-xs whitespace-nowrap">
+                {t.label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
 
-function CobranzaTab() {
-  const [clientes,       setClientes]       = useState<ClienteCobranza[]>(CLIENTES_MOCK)
-  const [loteLoading,    setLoteLoading]    = useState(false)
-  const [loteDone,       setLoteDone]       = useState(false)
-  const [loteError,      setLoteError]      = useState<string | null>(null)
-  const [expandedAgings, setExpandedAgings] = useState<Set<string>>(new Set())
-
-  const conBalance = clientes.filter((c) => c.balance > 0)
-  const totalPendiente = conBalance.reduce((s, c) => s + c.balance, 0)
-
-  const toggleAging = (id: string) =>
-    setExpandedAgings((prev) => {
-      const next = new Set(prev)
-      next.has(id) ? next.delete(id) : next.add(id)
-      return next
-    })
-
-  const handleLote = async () => {
-    setLoteLoading(true)
-    setLoteError(null)
-    try {
-      // Genera estados de cuenta (STMT) para todos los clientes activos en paralelo
-      const activos = clientes.filter((c) => c.balance > 0)
-      await Promise.all(
-        activos.map((c) =>
-          fetch('/api/dashboard/facturar', {
-            method:  'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              invoice_type:   'statement',
-              invoice_id:     `STMT-${c.id}-${Date.now()}`,
-              customer_name:  c.nombre,
-              customer_email: c.email,
-              total:          c.balance.toFixed(2),
-            }),
-          })
-        )
-      )
-      setLoteDone(true)
-    } catch (e) {
-      setLoteError(e instanceof Error ? e.message : 'Error en lote')
-    } finally {
-      setLoteLoading(false)
-    }
-  }
-
-  return (
-    <div className="space-y-4">
-      {/* Summary + lote button */}
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="flex gap-4 flex-wrap">
-          <div className="bg-white rounded-lg border border-slate-200 px-4 py-3 shadow-sm">
-            <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Balance total pendiente</p>
-            <p className="text-xl font-bold text-slate-800 mt-1">{fmt(totalPendiente)}</p>
-            <p className="text-xs text-slate-400 mt-0.5">{conBalance.length} cliente{conBalance.length !== 1 ? 's' : ''} con balance</p>
+        {/* Filters */}
+        <div className="flex flex-col sm:flex-row gap-3 animate-fade-in">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input placeholder="Buscar por ID o cliente..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
-          <div className="bg-white rounded-lg border border-slate-200 px-4 py-3 shadow-sm">
-            <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Clientes en mora</p>
-            <p className="text-xl font-bold text-red-600 mt-1">
-              {clientes.filter((c) => c.semaforo === 'rojo').length}
-            </p>
-            <p className="text-xs text-slate-400 mt-0.5">balance +60 días</p>
-          </div>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className={cn("text-xs gap-1.5 h-9", !dateFrom && "text-muted-foreground")}>
+                <CalendarIcon className="w-3.5 h-3.5" />
+                {dateFrom ? format(dateFrom, "dd/MM/yy") : "Desde"}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar mode="single" selected={dateFrom} onSelect={setDateFrom} className="p-3 pointer-events-auto" />
+            </PopoverContent>
+          </Popover>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className={cn("text-xs gap-1.5 h-9", !dateTo && "text-muted-foreground")}>
+                <CalendarIcon className="w-3.5 h-3.5" />
+                {dateTo ? format(dateTo, "dd/MM/yy") : "Hasta"}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar mode="single" selected={dateTo} onSelect={setDateTo} className="p-3 pointer-events-auto" />
+            </PopoverContent>
+          </Popover>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-full sm:w-36 h-9">
+              <SelectValue placeholder="Estado" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos</SelectItem>
+              <SelectItem value="enviada">Enviada</SelectItem>
+              <SelectItem value="vista">Vista</SelectItem>
+              <SelectItem value="pendiente">Pendiente</SelectItem>
+              <SelectItem value="vencida">Vencida</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
-        <div className="flex flex-col items-end gap-1">
-          {loteDone ? (
-            <span className="inline-flex items-center gap-1.5 px-4 py-2 text-sm text-emerald-600 font-medium bg-emerald-50 rounded-lg border border-emerald-200">
-              <CheckCircle size={14} /> Estados de cuenta enviados
-            </span>
-          ) : (
-            <button
-              onClick={handleLote}
-              disabled={loteLoading || conBalance.length === 0}
-              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg
-                bg-indigo-600 text-white hover:bg-indigo-700
-                disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-            >
-              {loteLoading ? <Loader2 size={14} className="animate-spin" /> : <Users size={14} />}
-              {loteLoading ? 'Generando…' : 'Generar en lote (STMT)'}
-            </button>
-          )}
-          {loteError && <p className="text-xs text-red-500">{loteError}</p>}
-          {!loteDone && <p className="text-xs text-slate-400">Genera estados de cuenta para {conBalance.length} clientes activos</p>}
-        </div>
-      </div>
-
-      {/* Clients table */}
-      <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 border-b border-slate-200">
-              <tr>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Cliente</th>
-                <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Balance</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Aging</th>
-                <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-slate-500">Estado</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500 whitespace-nowrap">Últ. Factura</th>
-                <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Acción</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {clientes.map((c) => {
-                const expanded = expandedAgings.has(c.id)
-                const rowBg = c.semaforo === 'rojo' ? 'bg-red-50/30' : c.semaforo === 'amarillo' ? 'bg-amber-50/20' : ''
-                return (
-                  <>
-                    <tr key={c.id} className={`hover:bg-slate-50 transition-colors ${rowBg}`}>
-                      <td className="px-4 py-3">
-                        <p className="font-medium text-slate-800">{c.nombre}</p>
-                        <p className="text-xs text-slate-400">{c.email}</p>
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <span className={`font-bold ${c.balance === 0 ? 'text-slate-400' : c.semaforo === 'rojo' ? 'text-red-600' : 'text-slate-800'}`}>
-                          {fmt(c.balance)}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <button
-                          onClick={() => toggleAging(c.id)}
-                          className="flex items-center gap-1 text-xs text-slate-500 hover:text-indigo-600"
-                        >
-                          {expanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-                          Ver desglose
-                        </button>
-                      </td>
-                      <td className="px-4 py-3 text-center">
-                        <SemaforoCobranza status={c.semaforo} />
-                      </td>
-                      <td className="px-4 py-3 text-xs text-slate-400 whitespace-nowrap">{c.ultima_factura}</td>
-                      <td className="px-4 py-3 text-right">
-                        <div className="flex flex-col items-end gap-1">
-                          <GenerarCobroButton
-                            cliente={c}
-                            tipo="collections"
-                            onDone={() => {}}
-                          />
-                          {c.semaforo === 'rojo' && (
-                            <GenerarCobroButton
-                              cliente={c}
-                              tipo="moratoria"
-                              onDone={() => {}}
-                            />
-                          )}
-                        </div>
-                      </td>
+        {/* Table */}
+        {loading ? (
+          <TableSkeleton rows={6} cols={7} />
+        ) : filtered.length === 0 ? (
+          <EmptyState
+            icon={<FileText className="w-7 h-7 text-muted-foreground" />}
+            title={tab === "todas" ? "Sin documentos" : `Sin ${tabFilters.find((t) => t.value === tab)?.label.toLowerCase()}`}
+            description="No se encontraron documentos con los filtros seleccionados."
+          />
+        ) : (
+          <Card className="overflow-hidden animate-fade-in">
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b bg-muted/50">
+                      <th className="text-left p-4 font-semibold text-muted-foreground">ID</th>
+                      <th className="text-left p-4 font-semibold text-muted-foreground">Cliente</th>
+                      <th className="text-left p-4 font-semibold text-muted-foreground hidden sm:table-cell">Tipo</th>
+                      <th className="text-left p-4 font-semibold text-muted-foreground">Monto</th>
+                      <th className="text-left p-4 font-semibold text-muted-foreground hidden md:table-cell">Fecha</th>
+                      <th className="text-left p-4 font-semibold text-muted-foreground">Estado</th>
+                      <th className="text-left p-4 font-semibold text-muted-foreground">Acciones</th>
                     </tr>
-
-                    {/* Aging detail row */}
-                    {expanded && (
-                      <tr key={`${c.id}-aging`} className="bg-indigo-50/40">
-                        <td colSpan={6} className="px-6 py-3">
-                          <AgingBar aging={c.aging} total={c.balance} />
+                  </thead>
+                  <tbody>
+                    {filtered.map((inv) => (
+                      <tr key={inv.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
+                        <td className="p-4 font-semibold font-mono text-xs">{inv.id}</td>
+                        <td className="p-4">{inv.client}</td>
+                        <td className="p-4 hidden sm:table-cell">
+                          <Badge variant="outline" className={`text-[10px] ${typeStyle[inv.type]}`}>
+                            {typeLabel[inv.type]}
+                          </Badge>
+                        </td>
+                        <td className="p-4 font-semibold">${inv.amount.toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
+                        <td className="p-4 text-muted-foreground hidden md:table-cell">{inv.date}</td>
+                        <td className="p-4">
+                          <Badge variant="outline" className={`text-[10px] ${statusStyle[inv.status]}`}>
+                            {statusLabel[inv.status]}
+                          </Badge>
+                        </td>
+                        <td className="p-4">
+                          <div className="flex gap-1.5">
+                            <Button variant="outline" size="sm" className="text-xs h-7 px-2 active:scale-95 transition-all" onClick={() => setPreviewDoc(inv)}>
+                              <Eye className="w-3.5 h-3.5 mr-1" /> Ver PDF
+                            </Button>
+                            <Button variant="ghost" size="sm" className="text-xs h-7 px-2 active:scale-95 transition-all" onClick={() => openResend(inv)}>
+                              <Send className="w-3.5 h-3.5" />
+                            </Button>
+                          </div>
                         </td>
                       </tr>
-                    )}
-                  </>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-        <div className="px-4 py-3 border-t border-slate-100 bg-slate-50">
-          <p className="text-xs text-slate-400">
-            {clientes.length} clientes · datos estáticos (WF12 pendiente integración)
-          </p>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ─── Page ─────────────────────────────────────────────────────────────────────
-
-type Tab = 'facturas' | 'cobranza'
-
-export default function FacturasPage() {
-  const [tab, setTab] = useState<Tab>('facturas')
-
-  const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
-    { id: 'facturas', label: 'Facturas',  icon: <FileText size={14} /> },
-    { id: 'cobranza', label: 'Cobranza',  icon: <Clock    size={14} /> },
-  ]
-
-  return (
-    <div className="space-y-5 max-w-6xl">
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <div>
-          <h1 className="text-xl font-bold text-slate-800">Facturas & Cobranza</h1>
-          <p className="text-sm text-slate-500 mt-0.5">Historial de PDFs + gestión de cuentas por cobrar (WF12)</p>
-        </div>
-        <button className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-indigo-600 transition-colors">
-          <RefreshCw size={13} /> Actualizar
-        </button>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-1 border-b border-slate-200">
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium
-              border-b-2 -mb-px transition-colors
-              ${tab === t.id
-                ? 'border-indigo-600 text-indigo-600'
-                : 'border-transparent text-slate-500 hover:text-slate-700'}`}
-          >
-            {t.icon}{t.label}
-          </button>
-        ))}
-      </div>
+      {/* PDF Preview Modal */}
+      <Dialog open={!!previewDoc} onOpenChange={(open) => { if (!open) setPreviewDoc(null); }}>
+        <DialogContent className="sm:max-w-2xl max-h-[90vh]">
+          <DialogHeader>
+            <DialogTitle>Vista previa — {previewDoc?.id}</DialogTitle>
+            <DialogDescription>{previewDoc?.client} · ${previewDoc?.amount.toLocaleString("en-US", { minimumFractionDigits: 2 })}</DialogDescription>
+          </DialogHeader>
+          <div className="bg-muted/30 rounded-lg flex items-center justify-center" style={{ minHeight: 400 }}>
+            <div className="text-center space-y-3 p-8">
+              <div className="w-16 h-16 mx-auto rounded-xl bg-muted flex items-center justify-center">
+                <FileText className="w-8 h-8 text-muted-foreground" />
+              </div>
+              <p className="text-sm font-medium">Vista previa del documento</p>
+              <p className="text-xs text-muted-foreground">
+                {typeLabel[previewDoc?.type || "factura"]} #{previewDoc?.id}<br />
+                Emitida: {previewDoc?.date}<br />
+                Monto: ${previewDoc?.amount.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+              </p>
+            </div>
+          </div>
+          <Button className="w-full gap-2 bg-primary hover:bg-primary/90 active:scale-95 transition-all">
+            <Download className="w-4 h-4" /> Descargar PDF
+          </Button>
+        </DialogContent>
+      </Dialog>
 
-      {/* Tab content */}
-      {tab === 'facturas' && <FacturasTab />}
-      {tab === 'cobranza' && <CobranzaTab />}
-    </div>
-  )
+      {/* Resend Modal */}
+      <Dialog open={!!resendDoc} onOpenChange={(open) => { if (!open) setResendDoc(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Reenviar {resendDoc?.id}</DialogTitle>
+            <DialogDescription>Enviar copia del documento al cliente</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Correo electrónico</label>
+              <Input type="email" value={resendEmail} onChange={(e) => setResendEmail(e.target.value)} />
+            </div>
+            <div className="p-3 rounded-lg bg-muted/30 text-xs space-y-1">
+              <p><span className="text-muted-foreground">Documento:</span> {resendDoc?.id}</p>
+              <p><span className="text-muted-foreground">Cliente:</span> {resendDoc?.client}</p>
+              <p><span className="text-muted-foreground">Monto:</span> ${resendDoc?.amount.toLocaleString("en-US", { minimumFractionDigits: 2 })}</p>
+            </div>
+            <Button className="w-full gap-2 bg-primary hover:bg-primary/90 active:scale-95 transition-all" onClick={confirmResend}>
+              <Send className="w-4 h-4" /> Enviar
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </DashboardLayout>
+  );
 }

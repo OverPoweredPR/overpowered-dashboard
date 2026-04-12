@@ -1,301 +1,332 @@
-'use client'
+import { useState, useEffect } from "react";
+import { DashboardLayout } from "@/components/DashboardLayout";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { TableSkeleton } from "@/components/Skeletons";
+import { EmptyState } from "@/components/EmptyState";
+import { AlertTriangle, Info, XCircle, ShieldCheck, Play, ChevronDown, Search, CheckCircle2, Clock } from "lucide-react";
+import { toast } from "sonner";
 
-import { useState } from 'react'
-import {
-  ShieldCheck, AlertTriangle, Info, XCircle, CheckCircle,
-  Clock, ChevronDown, ChevronUp, Play, RefreshCw, Loader2, X, AlertCircle,
-} from 'lucide-react'
-import { useAuditoria, useRunAuditoria, useRefreshDashboard } from '@/hooks/useDashboard'
-import type { Hallazgo, NocheAuditoria, Severidad } from '@/lib/api'
+type Severity = "error" | "warning" | "info";
+type AlertStatus = "sin_resolver" | "resuelto" | "ignorado";
 
-function timeAgo(iso: string): string {
-  const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 1000)
-  if (diff < 60)    return 'hace unos segundos'
-  if (diff < 3600)  return `hace ${Math.floor(diff / 60)}m`
-  if (diff < 86400) return `hace ${Math.floor(diff / 3600)}h`
-  return `hace ${Math.floor(diff / 86400)}d`
+interface Alert {
+  id: number;
+  severity: Severity;
+  description: string;
+  workflow: string;
+  detected: string;
+  status: AlertStatus;
+  resolvedAt?: string;
 }
 
-function fmtDateTime(iso: string): string {
-  return new Date(iso).toLocaleString('es-PR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+interface NightRecord {
+  date: string;
+  errors: number;
+  warnings: number;
+  totalProducts: number;
+  status: "ok" | "warning" | "error";
 }
 
-function fmtDate(dateStr: string): string {
-  return new Date(dateStr + 'T12:00:00').toLocaleDateString('es-PR', { weekday: 'short', month: 'short', day: 'numeric' })
-}
+const initialAlerts: Alert[] = [
+  { id: 1, severity: "error", description: "Stock cero: Huevos — reabastecimiento requerido", workflow: "WF11", detected: "12 Abr, 11:45 AM", status: "sin_resolver" },
+  { id: 2, severity: "error", description: "Stock cero: Crema — reabastecimiento requerido", workflow: "WF11", detected: "12 Abr, 11:30 AM", status: "sin_resolver" },
+  { id: 3, severity: "error", description: "Fallo sincronización Clover POS (timeout)", workflow: "WF7", detected: "12 Abr, 10:00 AM", status: "sin_resolver" },
+  { id: 4, severity: "warning", description: "Pago ORD-398 vencido +24h — Café La Plaza ($178.50)", workflow: "WF3", detected: "12 Abr, 9:30 AM", status: "sin_resolver" },
+  { id: 5, severity: "warning", description: "Discrepancia inventario: Levadura (Shopify 12 vs Airtable 8)", workflow: "WF11", detected: "12 Abr, 6:30 AM", status: "sin_resolver" },
+  { id: 6, severity: "warning", description: "Precio de mantequilla aumentó 8% vs último pedido", workflow: "WF3", detected: "11 Abr, 4:15 PM", status: "sin_resolver" },
+  { id: 7, severity: "info", description: "Reconciliación nocturna completada — 2 warnings", workflow: "WF11", detected: "12 Abr, 12:00 AM", status: "sin_resolver" },
+  { id: 8, severity: "info", description: "Orden ORD-401 creada — Hotel San Juan ($520)", workflow: "WF3", detected: "12 Abr, 8:00 AM", status: "sin_resolver" },
+  { id: 9, severity: "info", description: "Backup de datos completado exitosamente", workflow: "WF7", detected: "12 Abr, 3:00 AM", status: "sin_resolver" },
+];
 
-const SEV: Record<Severidad, { label: string; dot: string; badge: string; rowBg: string; icon: React.ReactNode }> = {
-  error:   { label: 'Error',   dot: 'bg-red-500',   badge: 'bg-red-100 text-red-700',     rowBg: 'border-l-red-500',   icon: <XCircle       size={15} className="text-red-500   shrink-0" /> },
-  warning: { label: 'Warning', dot: 'bg-amber-400', badge: 'bg-amber-100 text-amber-700', rowBg: 'border-l-amber-400', icon: <AlertTriangle size={15} className="text-amber-500 shrink-0" /> },
-  info:    { label: 'Info',    dot: 'bg-blue-400',  badge: 'bg-blue-100 text-blue-700',   rowBg: 'border-l-blue-400',  icon: <Info          size={15} className="text-blue-500  shrink-0" /> },
-}
+const nightHistory: NightRecord[] = [
+  { date: "2026-04-12", errors: 0, warnings: 2, totalProducts: 48, status: "warning" },
+  { date: "2026-04-11", errors: 1, warnings: 3, totalProducts: 48, status: "error" },
+  { date: "2026-04-10", errors: 0, warnings: 1, totalProducts: 47, status: "warning" },
+  { date: "2026-04-09", errors: 2, warnings: 4, totalProducts: 48, status: "error" },
+  { date: "2026-04-08", errors: 0, warnings: 0, totalProducts: 48, status: "ok" },
+  { date: "2026-04-07", errors: 0, warnings: 1, totalProducts: 46, status: "warning" },
+  { date: "2026-04-06", errors: 1, warnings: 2, totalProducts: 48, status: "error" },
+];
 
-function Skeleton({ className }: { className?: string }) {
-  return <div className={`animate-pulse bg-slate-200 rounded ${className ?? ''}`} />
-}
+const severityDot: Record<Severity, string> = {
+  error: "bg-destructive",
+  warning: "bg-warning",
+  info: "bg-info",
+};
 
-function PinModal({ onClose, onConfirm }: { onClose: () => void; onConfirm: (pin: string) => void }) {
-  const [digits, setDigits] = useState<string[]>(Array(6).fill(''))
-  const pin = digits.join('')
-  const handleDigit = (i: number, val: string) => {
-    if (!/^\d?$/.test(val)) return
-    const next = [...digits]; next[i] = val; setDigits(next)
-    if (val && i < 5) (document.getElementById(`apin-${i + 1}`) as HTMLInputElement)?.focus()
-  }
-  const handleKeyDown = (i: number, e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Backspace' && !digits[i] && i > 0) (document.getElementById(`apin-${i - 1}`) as HTMLInputElement)?.focus()
-    if (e.key === 'Enter' && pin.length >= 4) onConfirm(pin)
-  }
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-sm p-6 space-y-5">
-        <div className="flex items-start justify-between">
-          <div><h2 className="text-base font-bold text-slate-800">PIN de administrador</h2>
-            <p className="text-sm text-slate-500 mt-0.5">Requerido para auditoría manual</p></div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X size={18} /></button>
-        </div>
-        <div className="flex gap-2 justify-center">
-          {digits.map((d, i) => (
-            <input key={i} id={`apin-${i}`} type="password" inputMode="numeric" maxLength={1} value={d}
-              autoFocus={i === 0} onChange={(e) => handleDigit(i, e.target.value)} onKeyDown={(e) => handleKeyDown(i, e)}
-              className={`w-10 h-12 text-center text-lg font-bold rounded-lg border-2 focus:outline-none focus:border-indigo-500 transition-colors ${d ? 'border-indigo-400 bg-indigo-50' : 'border-slate-200'}`} />
-          ))}
-        </div>
-        <p className="text-xs text-center text-slate-400">4 a 6 dígitos</p>
-        <div className="flex gap-2">
-          <button onClick={onClose} className="flex-1 px-4 py-2 text-sm font-medium rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50">Cancelar</button>
-          <button onClick={() => pin.length >= 4 && onConfirm(pin)} disabled={pin.length < 4}
-            className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-40 transition-colors">
-            <Play size={13} /> Ejecutar
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
+const statusBadgeStyle: Record<AlertStatus, string> = {
+  sin_resolver: "bg-destructive/10 text-destructive border-destructive/30",
+  resuelto: "bg-success/10 text-success border-success/30",
+  ignorado: "bg-muted text-muted-foreground border-border",
+};
 
-function HallazgoCard({ hallazgo, onResolve }: { hallazgo: Hallazgo; onResolve: (id: string) => void }) {
-  const cfg = SEV[hallazgo.severidad]
-  return (
-    <div className={`bg-white rounded-lg border border-l-4 border-slate-200 p-3 flex gap-3 ${cfg.rowBg} ${hallazgo.resuelto ? 'opacity-60' : ''}`}>
-      <div className="mt-0.5">{cfg.icon}</div>
-      <div className="flex-1 min-w-0 space-y-1">
-        <p className={`text-sm text-slate-700 ${hallazgo.resuelto ? 'line-through' : ''}`}>{hallazgo.descripcion}</p>
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${cfg.badge}`}>{cfg.label}</span>
-          <span className="text-xs font-mono bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">{hallazgo.workflow}</span>
-          <span className="text-xs text-slate-400">{fmtDateTime(hallazgo.timestamp)}</span>
-          {hallazgo.resuelto && hallazgo.resuelto_por && (
-            <span className="text-xs text-emerald-600 flex items-center gap-0.5"><CheckCircle size={10} /> Resuelto por {hallazgo.resuelto_por}</span>
-          )}
-        </div>
-      </div>
-      {!hallazgo.resuelto && (
-        <button onClick={() => onResolve(hallazgo.id)}
-          className="shrink-0 self-start px-2.5 py-1 text-xs font-medium rounded-md border border-emerald-200 text-emerald-700 hover:bg-emerald-50 transition-colors">
-          Resolver
-        </button>
-      )}
-    </div>
-  )
-}
+const statusLabel: Record<AlertStatus, string> = {
+  sin_resolver: "Sin resolver",
+  resuelto: "Resuelto",
+  ignorado: "Ignorado",
+};
 
-function NocheRow({ noche }: { noche: NocheAuditoria }) {
-  const [open, setOpen] = useState(false)
-  const pendientes = noche.hallazgos.filter((h) => !h.resuelto).length
-  return (
-    <>
-      <tr onClick={() => setOpen((v) => !v)} className="hover:bg-slate-50 cursor-pointer transition-colors">
-        <td className="px-4 py-3 text-sm text-slate-700">
-          <span className="flex items-center gap-1.5">
-            {open ? <ChevronUp size={13} className="text-slate-400" /> : <ChevronDown size={13} className="text-slate-400" />}
-            {fmtDate(noche.fecha)}
-          </span>
-        </td>
-        <td className="px-4 py-3 text-center">
-          {noche.resumen.error > 0
-            ? <span className="inline-flex items-center gap-1 text-xs font-semibold text-red-700 bg-red-100 px-2 py-0.5 rounded-full"><span className="w-1.5 h-1.5 rounded-full bg-red-500" />{noche.resumen.error}</span>
-            : <span className="text-xs text-slate-300">—</span>}
-        </td>
-        <td className="px-4 py-3 text-center">
-          {noche.resumen.warning > 0
-            ? <span className="inline-flex items-center gap-1 text-xs font-semibold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full"><span className="w-1.5 h-1.5 rounded-full bg-amber-400" />{noche.resumen.warning}</span>
-            : <span className="text-xs text-slate-300">—</span>}
-        </td>
-        <td className="px-4 py-3 text-center">
-          {noche.resumen.info > 0
-            ? <span className="inline-flex items-center gap-1 text-xs font-semibold text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full"><span className="w-1.5 h-1.5 rounded-full bg-blue-400" />{noche.resumen.info}</span>
-            : <span className="text-xs text-slate-300">—</span>}
-        </td>
-        <td className="px-4 py-3 text-center text-sm font-semibold text-slate-600">{noche.resumen.total}</td>
-        <td className="px-4 py-3 text-center">
-          {pendientes === 0
-            ? <CheckCircle size={14} className="text-emerald-500 mx-auto" />
-            : <span className="text-xs text-amber-600 font-medium">{pendientes} pendiente{pendientes !== 1 ? 's' : ''}</span>}
-        </td>
-      </tr>
-      {open && (
-        <tr><td colSpan={6} className="px-4 pb-3 bg-slate-50/60">
-          <div className="space-y-1.5 pt-1">
-            {noche.hallazgos.map((h) => (
-              <div key={h.id} className={`flex items-start gap-2 text-xs p-2 rounded-lg border-l-2
-                ${h.severidad === 'error' ? 'border-l-red-400 bg-red-50' : h.severidad === 'warning' ? 'border-l-amber-400 bg-amber-50' : 'border-l-blue-300 bg-blue-50'}`}>
-                {SEV[h.severidad].icon}
-                <span className={`flex-1 text-slate-700 ${h.resuelto ? 'line-through opacity-60' : ''}`}>{h.descripcion}</span>
-                <span className="text-slate-400 whitespace-nowrap font-mono">{h.workflow}</span>
-              </div>
-            ))}
-          </div>
-        </td></tr>
-      )}
-    </>
-  )
-}
+const wfColors: Record<string, string> = {
+  WF11: "bg-purple-500/15 text-purple-400 border-purple-500/30",
+  WF3: "bg-blue-500/15 text-blue-400 border-blue-500/30",
+  WF7: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
+};
 
-export default function AuditoriaPage() {
-  const { data, isPending, error, refetch } = useAuditoria()
-  const { refreshAuditoria }                = useRefreshDashboard()
-  const runMutation                         = useRunAuditoria()
+const nightStatusIcon: Record<string, string> = { ok: "✅", warning: "⚠️", error: "❌" };
 
-  const [showPin,   setShowPin]   = useState(false)
-  const [hallazgos, setHallazgos] = useState<Hallazgo[] | null>(null)
-  const [runStatus, setRunStatus] = useState<'idle' | 'running' | 'done' | 'error'>('idle')
-  const [runMsg,    setRunMsg]    = useState<string | null>(null)
+const severityOrder: Record<Severity, number> = { error: 0, warning: 1, info: 2 };
 
-  const activeHallazgos = hallazgos ?? data?.sin_resolver ?? []
+export default function Auditoria() {
+  const [alerts, setAlerts] = useState(initialAlerts);
+  const [pinOpen, setPinOpen] = useState(false);
+  const [pin, setPin] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [historyOpen, setHistoryOpen] = useState(true);
+  const [filterSeverity, setFilterSeverity] = useState<string>("all");
+  const [filterWorkflow, setFilterWorkflow] = useState<string>("all");
+  const [search, setSearch] = useState("");
 
-  const handleResolve = (id: string) => {
-    const base = hallazgos ?? data?.sin_resolver ?? []
-    setHallazgos(base.map((h) =>
-      h.id === id ? { ...h, resuelto: true, resuelto_en: new Date().toISOString(), resuelto_por: 'Usuario' } : h
-    ))
-  }
+  useEffect(() => { const t = setTimeout(() => setLoading(false), 500); return () => clearTimeout(t); }, []);
 
-  const handleRunPin = async (pin: string) => {
-    setShowPin(false); setRunStatus('running'); setRunMsg(null)
-    try {
-      const result = await runMutation.mutateAsync(pin)
-      setRunStatus('done'); setRunMsg(result.mensaje)
-    } catch (e) {
-      setRunStatus('error'); setRunMsg(e instanceof Error ? e.message : 'Error al ejecutar')
+  const filtered = alerts
+    .filter((a) => filterSeverity === "all" || a.severity === filterSeverity)
+    .filter((a) => filterWorkflow === "all" || a.workflow === filterWorkflow)
+    .filter((a) => !search || a.description.toLowerCase().includes(search.toLowerCase()))
+    .sort((a, b) => severityOrder[a.severity] - severityOrder[b.severity]);
+
+  const totalCount = alerts.length;
+  const errorCount = alerts.filter((a) => a.severity === "error").length;
+  const warningCount = alerts.filter((a) => a.severity === "warning").length;
+  const resolvedCount = alerts.filter((a) => a.status === "resuelto").length;
+
+  const handleResolve = (id: number) => {
+    const now = new Date().toLocaleString("es-PR", { hour: "2-digit", minute: "2-digit", hour12: true, day: "2-digit", month: "short" });
+    setAlerts((prev) => prev.map((a) => a.id === id ? { ...a, status: "resuelto" as AlertStatus, resolvedAt: now } : a));
+    toast.success("Hallazgo marcado como resuelto");
+  };
+
+  const handleIgnore = (id: number) => {
+    setAlerts((prev) => prev.map((a) => a.id === id ? { ...a, status: "ignorado" as AlertStatus } : a));
+    toast("Hallazgo ignorado", { icon: "🔇" });
+  };
+
+  const handleRunAudit = () => {
+    if (pin.length === 6) {
+      setPinOpen(false);
+      setPin("");
+      toast.success("Auditoría ejecutada exitosamente");
     }
-  }
+  };
 
-  if (isPending) return (
-    <div className="space-y-5 max-w-4xl">
-      <div className="flex items-center justify-between"><h1 className="text-xl font-bold text-slate-800">Auditoría</h1><Skeleton className="h-8 w-40" /></div>
-      <div className="space-y-2">{Array.from({ length: 4 }).map((_, i) => <div key={i} className="bg-white rounded-lg border border-l-4 border-slate-200 border-l-slate-300 p-3 space-y-2"><Skeleton className="h-4 flex-1" /><Skeleton className="h-3 w-32" /></div>)}</div>
-    </div>
-  )
-
-  if (error) return (
-    <div className="space-y-4 max-w-4xl">
-      <h1 className="text-xl font-bold text-slate-800">Auditoría</h1>
-      <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3">
-        <AlertCircle size={16} className="text-red-500 shrink-0" />
-        <p className="text-sm text-red-700 flex-1">No se pudo cargar: {error.message}</p>
-        <button onClick={() => refetch()} className="text-xs font-medium text-red-600 underline">Reintentar</button>
-      </div>
-    </div>
-  )
-
-  const sinResolver  = activeHallazgos.filter((h) => !h.resuelto)
-  const erroreCount  = sinResolver.filter((h) => h.severidad === 'error').length
-  const warningCount = sinResolver.filter((h) => h.severidad === 'warning').length
+  const workflows = [...new Set(alerts.map((a) => a.workflow))];
 
   return (
-    <>
-      <div className="space-y-6 max-w-4xl">
-        <div className="flex items-start justify-between gap-3 flex-wrap">
+    <DashboardLayout>
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 animate-fade-in">
           <div>
-            <h1 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-              <ShieldCheck size={20} className="text-indigo-600" /> Auditoría del Sistema
-            </h1>
-            <div className="flex items-center gap-3 mt-1 flex-wrap">
-              {data && (
-                <span className="flex items-center gap-1.5 text-xs text-slate-500">
-                  <Clock size={12} /> Última: <span className="font-medium text-slate-700">{timeAgo(data.ultima_auditoria)}</span> · {fmtDateTime(data.ultima_auditoria)}
-                </span>
-              )}
-              <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${data?.wf11_activo ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
-                WF11 {data?.wf11_activo ? 'activo' : 'inactivo en local'}
-              </span>
-            </div>
+            <h1 className="text-2xl font-bold">Auditoría</h1>
+            <p className="text-sm text-muted-foreground">Monitoreo del sistema y hallazgos</p>
           </div>
-          <div className="flex items-center gap-2">
-            <button onClick={refreshAuditoria} className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-indigo-600 transition-colors">
-              <RefreshCw size={13} /> Actualizar
-            </button>
-            <button onClick={() => setShowPin(true)} disabled={runStatus === 'running'}
-              className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors">
-              {runStatus === 'running' ? <><Loader2 size={14} className="animate-spin" /> Ejecutando…</> : <><Play size={14} /> Ejecutar ahora</>}
-            </button>
+          <div className="flex items-center gap-3 flex-wrap">
+            <Badge variant="outline" className="text-xs gap-1.5 py-1">
+              <Clock className="w-3 h-3" /> Última auditoría: hoy 1:05 AM
+            </Badge>
+            <Button size="sm" className="gap-2 bg-primary hover:bg-primary/90 active:scale-95 transition-all" onClick={() => { setPinOpen(true); setPin(""); }}>
+              <Play className="w-3.5 h-3.5" /> Ejecutar Ahora
+            </Button>
           </div>
         </div>
 
-        {runMsg && (
-          <div className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border text-sm ${runStatus === 'done' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-red-50 border-red-200 text-red-700'}`}>
-            {runStatus === 'done' ? <CheckCircle size={14} /> : <XCircle size={14} />}{runMsg}
+        {/* Summary chips */}
+        <div className="flex flex-wrap gap-2 animate-fade-in">
+          <Badge variant="outline" className="bg-muted/60 text-foreground gap-1.5 py-1.5 px-3 text-xs">
+            Total Hallazgos: <span className="font-bold">{totalCount}</span>
+          </Badge>
+          <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/30 gap-1.5 py-1.5 px-3 text-xs">
+            <XCircle className="w-3.5 h-3.5" /> Errores: <span className="font-bold">{errorCount}</span>
+          </Badge>
+          <Badge variant="outline" className="bg-warning/10 text-warning border-warning/30 gap-1.5 py-1.5 px-3 text-xs">
+            <AlertTriangle className="w-3.5 h-3.5" /> Warnings: <span className="font-bold">{warningCount}</span>
+          </Badge>
+          <Badge variant="outline" className="bg-success/10 text-success border-success/30 gap-1.5 py-1.5 px-3 text-xs">
+            <CheckCircle2 className="w-3.5 h-3.5" /> Resueltos: <span className="font-bold">{resolvedCount}</span>
+          </Badge>
+        </div>
+
+        {/* Filter bar */}
+        <div className="flex flex-col sm:flex-row gap-3 animate-fade-in">
+          <Select value={filterSeverity} onValueChange={setFilterSeverity}>
+            <SelectTrigger className="w-full sm:w-40">
+              <SelectValue placeholder="Severidad" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas</SelectItem>
+              <SelectItem value="error">Error</SelectItem>
+              <SelectItem value="warning">Warning</SelectItem>
+              <SelectItem value="info">Info</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={filterWorkflow} onValueChange={setFilterWorkflow}>
+            <SelectTrigger className="w-full sm:w-40">
+              <SelectValue placeholder="Workflow" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos</SelectItem>
+              {workflows.map((w) => <SelectItem key={w} value={w}>{w}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input placeholder="Buscar hallazgo..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
+        </div>
+
+        {/* Main table */}
+        {loading ? (
+          <TableSkeleton rows={6} cols={6} />
+        ) : filtered.length === 0 ? (
+          <EmptyState icon={<ShieldCheck className="w-7 h-7 text-success" />} title="Sistema OK" description="No hay hallazgos que coincidan con los filtros." />
+        ) : (
+          <Card className="overflow-hidden animate-fade-in">
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b bg-muted/50">
+                      <th className="text-left p-4 font-semibold text-muted-foreground">Severidad</th>
+                      <th className="text-left p-4 font-semibold text-muted-foreground">Workflow</th>
+                      <th className="text-left p-4 font-semibold text-muted-foreground">Descripción</th>
+                      <th className="text-left p-4 font-semibold text-muted-foreground hidden md:table-cell">Detectado</th>
+                      <th className="text-left p-4 font-semibold text-muted-foreground">Estado</th>
+                      <th className="text-left p-4 font-semibold text-muted-foreground">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map((a) => (
+                      <tr key={a.id} className={`border-b last:border-0 transition-colors ${a.status === "ignorado" ? "opacity-50" : "hover:bg-muted/30"}`}>
+                        <td className="p-4">
+                          <div className="flex items-center gap-2">
+                            <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${severityDot[a.severity]}`} />
+                            <span className="capitalize text-xs font-medium">{a.severity === "error" ? "Error" : a.severity === "warning" ? "Warning" : "Info"}</span>
+                          </div>
+                        </td>
+                        <td className="p-4">
+                          <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${wfColors[a.workflow] || ""}`}>
+                            {a.workflow}
+                          </Badge>
+                        </td>
+                        <td className="p-4 max-w-xs">
+                          <p className="text-sm truncate">{a.description}</p>
+                          {a.resolvedAt && <p className="text-[10px] text-muted-foreground mt-0.5">Resuelto: {a.resolvedAt}</p>}
+                        </td>
+                        <td className="p-4 text-muted-foreground text-xs hidden md:table-cell">{a.detected}</td>
+                        <td className="p-4">
+                          <Badge variant="outline" className={`text-[10px] ${statusBadgeStyle[a.status]}`}>
+                            {statusLabel[a.status]}
+                          </Badge>
+                        </td>
+                        <td className="p-4">
+                          {a.status === "sin_resolver" && (
+                            <div className="flex gap-1.5">
+                              <Button variant="outline" size="sm" className="text-xs h-7 px-2 hover:bg-success/10 hover:text-success active:scale-95 transition-all" onClick={() => handleResolve(a.id)}>
+                                Resolver
+                              </Button>
+                              <Button variant="ghost" size="sm" className="text-xs h-7 px-2 text-muted-foreground hover:text-foreground active:scale-95 transition-all" onClick={() => handleIgnore(a.id)}>
+                                Ignorar
+                              </Button>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
         )}
 
-        <div className="flex gap-2 flex-wrap">
-          {[
-            { label: `${erroreCount} error${erroreCount !== 1 ? 'es' : ''}`,     color: erroreCount  > 0 ? 'bg-red-100   text-red-700'   : 'bg-slate-100 text-slate-400' },
-            { label: `${warningCount} warning${warningCount !== 1 ? 's' : ''}`, color: warningCount > 0 ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-400' },
-            { label: `${sinResolver.length} sin resolver`,                        color: sinResolver.length > 0 ? 'bg-slate-700 text-white' : 'bg-slate-100 text-slate-400' },
-          ].map((p) => (
-            <span key={p.label} className={`text-xs font-semibold px-3 py-1 rounded-full ${p.color}`}>{p.label}</span>
-          ))}
-        </div>
-
-        <section>
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">Hallazgos sin resolver</h2>
-          {sinResolver.length === 0 ? (
-            <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-lg px-4 py-3">
-              <CheckCircle size={16} className="text-emerald-500" />
-              <p className="text-sm text-emerald-700">No hay hallazgos pendientes — sistema OK</p>
-            </div>
-          ) : (
-            <div className="space-y-2">
-              {(['error', 'warning', 'info'] as Severidad[]).flatMap((sev) =>
-                sinResolver.filter((h) => h.severidad === sev).map((h) => (
-                  <HallazgoCard key={h.id} hallazgo={h} onResolve={handleResolve} />
-                ))
-              )}
-            </div>
-          )}
-        </section>
-
-        <section>
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">Historial — últimas 30 noches</h2>
-          <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-slate-50 border-b border-slate-200">
-                  <tr>
-                    <th className="px-4 py-3 text-left   text-xs font-semibold uppercase tracking-wider text-slate-500">Fecha</th>
-                    <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-red-400">Errores</th>
-                    <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-amber-400">Warnings</th>
-                    <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-blue-400">Info</th>
-                    <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-slate-500">Total</th>
-                    <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-slate-500">Estado</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {(data?.historial ?? []).map((noche) => <NocheRow key={noche.fecha} noche={noche} />)}
-                </tbody>
-              </table>
-            </div>
-            <div className="px-4 py-3 border-t border-slate-100 bg-slate-50">
-              <p className="text-xs text-slate-400">{data?.historial.length ?? 0} noches · WF11 cron: <span className="font-mono">5 1 * * *</span> (9:05 PM AST)</p>
-            </div>
-          </div>
-        </section>
+        {/* Reconciliation history */}
+        <Collapsible open={historyOpen} onOpenChange={setHistoryOpen}>
+          <Card>
+            <CollapsibleTrigger asChild>
+              <CardHeader className="cursor-pointer hover:bg-muted/30 transition-colors pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  Historial de Reconciliación (últimas 7 noches)
+                  <ChevronDown className={`w-4 h-4 ml-auto transition-transform ${historyOpen ? "rotate-180" : ""}`} />
+                </CardTitle>
+              </CardHeader>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b bg-muted/50">
+                        <th className="text-left p-4 font-semibold text-muted-foreground">Fecha</th>
+                        <th className="text-left p-4 font-semibold text-muted-foreground">Errores</th>
+                        <th className="text-left p-4 font-semibold text-muted-foreground">Warnings</th>
+                        <th className="text-left p-4 font-semibold text-muted-foreground">Total Productos</th>
+                        <th className="text-left p-4 font-semibold text-muted-foreground">Estado</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {nightHistory.map((r) => (
+                        <tr key={r.date} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
+                          <td className="p-4 font-mono text-xs">{r.date}</td>
+                          <td className="p-4">
+                            {r.errors > 0 ? <Badge variant="destructive" className="text-xs">{r.errors}</Badge> : <span className="text-muted-foreground">0</span>}
+                          </td>
+                          <td className="p-4">
+                            {r.warnings > 0 ? <Badge variant="outline" className="text-xs bg-warning/15 text-warning border-warning/30">{r.warnings}</Badge> : <span className="text-muted-foreground">0</span>}
+                          </td>
+                          <td className="p-4 text-muted-foreground">{r.totalProducts}</td>
+                          <td className="p-4 text-base">{nightStatusIcon[r.status]}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </CollapsibleContent>
+          </Card>
+        </Collapsible>
       </div>
 
-      {showPin && <PinModal onClose={() => setShowPin(false)} onConfirm={handleRunPin} />}
-    </>
-  )
+      {/* PIN Modal */}
+      <Dialog open={pinOpen} onOpenChange={(open) => { if (!open) setPinOpen(false); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Ejecutar Auditoría</DialogTitle>
+            <DialogDescription>Ingresa el PIN de 6 dígitos para iniciar la auditoría manual</DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col items-center gap-6 py-4">
+            <InputOTP maxLength={6} value={pin} onChange={setPin} onComplete={handleRunAudit}>
+              <InputOTPGroup>
+                <InputOTPSlot index={0} />
+                <InputOTPSlot index={1} />
+                <InputOTPSlot index={2} />
+                <InputOTPSlot index={3} />
+                <InputOTPSlot index={4} />
+                <InputOTPSlot index={5} />
+              </InputOTPGroup>
+            </InputOTP>
+            <Button className="w-full bg-primary hover:bg-primary/90 active:scale-95 transition-all" disabled={pin.length < 6} onClick={handleRunAudit}>
+              Ejecutar
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </DashboardLayout>
+  );
 }

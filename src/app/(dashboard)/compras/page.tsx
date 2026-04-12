@@ -1,609 +1,490 @@
-'use client'
+import { useState, useEffect, useCallback } from "react";
+import { DashboardLayout } from "@/components/DashboardLayout";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { TableSkeleton } from "@/components/Skeletons";
+import { EmptyState } from "@/components/EmptyState";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Upload, FileText, ShoppingCart, Plus, Eye, PackageCheck, Trash2, ChevronDown, Sparkles } from "lucide-react";
+import { toast } from "sonner";
 
-import { useRef, useState } from 'react'
-import {
-  Camera,
-  Loader2,
-  CheckCircle,
-  XCircle,
-  Package,
-  RotateCcw,
-  AlertTriangle,
-  FileText,
-  Truck,
-  ChevronDown,
-  ChevronUp,
-} from 'lucide-react'
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-type OCRItem = {
-  descripcion:     string
-  cantidad:        number
-  precio_unitario: number
-  total:           number
+interface LineItem {
+  sku: string;
+  name: string;
+  qtyOrdered: number;
+  qtyReceived: number;
+  price: number;
 }
 
-type OCRResult = {
-  proveedor:       string
-  numero_factura:  string
-  fecha:           string
-  items:           OCRItem[]
-  subtotal:        number
-  impuesto:        number
-  total:           number
+interface PO {
+  id: string;
+  vendor: string;
+  items: LineItem[];
+  total: number;
+  date: string;
+  status: "borrador" | "enviada" | "recibida" | "cancelada";
 }
 
-type POEstado = 'pendiente' | 'recibido' | 'pagado'
+const initialPOs: PO[] = [
+  {
+    id: "PO-120", vendor: "Dairy Fresh", total: 890, date: "11 Abr", status: "recibida",
+    items: [
+      { sku: "DF-001", name: "Mantequilla 1lb", qtyOrdered: 50, qtyReceived: 50, price: 4.80 },
+      { sku: "DF-002", name: "Crema Heavy 1qt", qtyOrdered: 30, qtyReceived: 30, price: 6.50 },
+      { sku: "DF-003", name: "Leche Entera 1gal", qtyOrdered: 40, qtyReceived: 38, price: 5.20 },
+    ],
+  },
+  {
+    id: "PO-119", vendor: "Flour Mill PR", total: 1250, date: "10 Abr", status: "enviada",
+    items: [
+      { sku: "FM-010", name: "Harina T-55 25kg", qtyOrdered: 20, qtyReceived: 0, price: 42.00 },
+      { sku: "FM-011", name: "Harina Integral 10kg", qtyOrdered: 10, qtyReceived: 0, price: 28.00 },
+    ],
+  },
+  {
+    id: "PO-118", vendor: "Huevos del Campo", total: 340, date: "9 Abr", status: "enviada",
+    items: [
+      { sku: "HC-005", name: "Huevos Grado A (caja 30)", qtyOrdered: 20, qtyReceived: 0, price: 17.00 },
+    ],
+  },
+  {
+    id: "PO-117", vendor: "Caribbean Sugar Co", total: 560, date: "8 Abr", status: "borrador",
+    items: [
+      { sku: "CS-001", name: "Azúcar Refinada 50lb", qtyOrdered: 15, qtyReceived: 0, price: 24.00 },
+      { sku: "CS-002", name: "Azúcar Morena 25lb", qtyOrdered: 10, qtyReceived: 0, price: 20.00 },
+    ],
+  },
+  {
+    id: "PO-116", vendor: "Dairy Fresh", total: 720, date: "7 Abr", status: "cancelada",
+    items: [
+      { sku: "DF-001", name: "Mantequilla 1lb", qtyOrdered: 60, qtyReceived: 0, price: 4.80 },
+      { sku: "DF-004", name: "Queso Crema 8oz", qtyOrdered: 40, qtyReceived: 0, price: 3.50 },
+    ],
+  },
+];
 
-type PO = {
-  id:        string
-  numero:    string
-  proveedor: string
-  fecha:     string
-  total:     number
-  estado:    POEstado
-  items:     number
-}
+const vendors = ["Dairy Fresh", "Flour Mill PR", "Huevos del Campo", "Caribbean Sugar Co", "Levadura PR"];
 
-// ─── Static PO mock data ──────────────────────────────────────────────────────
+const statusStyle: Record<string, string> = {
+  borrador: "bg-muted text-muted-foreground border-border",
+  enviada: "bg-info/10 text-info border-info/30",
+  recibida: "bg-success/10 text-success border-success/30",
+  cancelada: "bg-destructive/10 text-destructive border-destructive/30",
+};
 
-const POS_MOCK: PO[] = [
-  { id: '1', numero: 'PO-2042', proveedor: 'Panadería El Bohío',    fecha: '2026-04-10', total: 845.00, estado: 'pendiente', items: 8 },
-  { id: '2', numero: 'PO-2041', proveedor: 'Distribuidora Central', fecha: '2026-04-08', total: 1230.50, estado: 'recibido', items: 12 },
-  { id: '3', numero: 'PO-2040', proveedor: 'Proveedor Lácteos PR',  fecha: '2026-04-05', total: 390.75, estado: 'pagado',   items: 5 },
-  { id: '4', numero: 'PO-2039', proveedor: 'Panadería El Bohío',    fecha: '2026-04-01', total: 720.00, estado: 'pagado',   items: 7 },
-  { id: '5', numero: 'PO-2038', proveedor: 'Distribuidora Central', fecha: '2026-03-28', total: 980.25, estado: 'pagado',   items: 9 },
-]
+const statusLabel: Record<string, string> = {
+  borrador: "Borrador",
+  enviada: "Enviada",
+  recibida: "Recibida",
+  cancelada: "Cancelada",
+};
 
-// ─── PO status badge ──────────────────────────────────────────────────────────
+export default function Compras() {
+  const [pos, setPOs] = useState(initialPOs);
+  const [loading, setLoading] = useState(true);
+  const [expandedRow, setExpandedRow] = useState<string | null>(null);
+  const [receiveModal, setReceiveModal] = useState<PO | null>(null);
+  const [receiveQtys, setReceiveQtys] = useState<number[]>([]);
+  const [newModal, setNewModal] = useState(false);
+  const [newVendor, setNewVendor] = useState("");
+  const [newItems, setNewItems] = useState<{ sku: string; name: string; qty: number; price: number }[]>([{ sku: "", name: "", qty: 1, price: 0 }]);
 
-const PO_STATUS: Record<POEstado, { label: string; className: string; icon: React.ReactNode }> = {
-  pendiente: { label: 'Pendiente', className: 'bg-amber-100 text-amber-700',   icon: <AlertTriangle size={11} /> },
-  recibido:  { label: 'Recibido',  className: 'bg-blue-100  text-blue-700',    icon: <Truck         size={11} /> },
-  pagado:    { label: 'Pagado',    className: 'bg-emerald-100 text-emerald-700', icon: <CheckCircle  size={11} /> },
-}
+  // OCR state
+  const [ocrDragging, setOcrDragging] = useState(false);
+  const [ocrProcessing, setOcrProcessing] = useState(false);
+  const [ocrResults, setOcrResults] = useState<{ sku: string; name: string; qty: number; price: number }[] | null>(null);
 
-function StatusBadge({ estado }: { estado: POEstado }) {
-  const cfg = PO_STATUS[estado]
-  return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${cfg.className}`}>
-      {cfg.icon}{cfg.label}
-    </span>
-  )
-}
+  useEffect(() => { const t = setTimeout(() => setLoading(false), 500); return () => clearTimeout(t); }, []);
 
-// ─── Marcar recibido button ───────────────────────────────────────────────────
+  const openCount = pos.filter((p) => p.status === "borrador" || p.status === "enviada").length;
+  const pendingRecv = pos.filter((p) => p.status === "enviada").length;
+  const monthSpend = pos.filter((p) => p.status === "recibida").reduce((s, p) => s + p.total, 0);
 
-function RecibirButton({ po, onRecibido }: { po: PO; onRecibido: (id: string) => void }) {
-  const [loading, setLoading] = useState(false)
-  const [error,   setError]   = useState<string | null>(null)
+  // Receive modal
+  const openReceive = (po: PO) => {
+    setReceiveModal(po);
+    setReceiveQtys(po.items.map((i) => i.qtyReceived));
+  };
 
-  if (po.estado !== 'pendiente') return null
+  const confirmReceive = () => {
+    if (!receiveModal) return;
+    setPOs((prev) => prev.map((p) => {
+      if (p.id !== receiveModal.id) return p;
+      return {
+        ...p,
+        status: "recibida" as const,
+        items: p.items.map((item, i) => ({ ...item, qtyReceived: receiveQtys[i] })),
+      };
+    }));
+    setReceiveModal(null);
+    toast.success(`${receiveModal.id} marcada como recibida`);
+  };
 
-  const handleRecibir = async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      const res = await fetch('/api/dashboard/compra/recibir', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ po_id: po.id, po_numero: po.numero, proveedor: po.proveedor }),
-      })
-      if (!res.ok) {
-        const d = await res.json()
-        throw new Error(d.error ?? `HTTP ${res.status}`)
-      }
-      onRecibido(po.id)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Error')
-    } finally {
-      setLoading(false)
+  // New PO
+  const addNewItem = () => setNewItems((prev) => [...prev, { sku: "", name: "", qty: 1, price: 0 }]);
+  const removeNewItem = (idx: number) => setNewItems((prev) => prev.filter((_, i) => i !== idx));
+  const updateNewItem = (idx: number, field: string, value: string | number) => {
+    setNewItems((prev) => prev.map((item, i) => i === idx ? { ...item, [field]: value } : item));
+  };
+  const newTotal = newItems.reduce((s, i) => s + i.qty * i.price, 0);
+
+  const createPO = () => {
+    if (!newVendor || newItems.some((i) => !i.sku || !i.name)) {
+      toast.error("Completa todos los campos requeridos");
+      return;
     }
-  }
+    const po: PO = {
+      id: `PO-${121 + pos.length}`,
+      vendor: newVendor,
+      items: newItems.map((i) => ({ sku: i.sku, name: i.name, qtyOrdered: i.qty, qtyReceived: 0, price: i.price })),
+      total: newTotal,
+      date: "12 Abr",
+      status: "borrador",
+    };
+    setPOs((prev) => [po, ...prev]);
+    setNewModal(false);
+    setNewVendor("");
+    setNewItems([{ sku: "", name: "", qty: 1, price: 0 }]);
+    toast.success(`${po.id} creada exitosamente`);
+  };
+
+  // OCR simulation
+  const handleOCRDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setOcrDragging(false);
+    setOcrProcessing(true);
+    setOcrResults(null);
+    setTimeout(() => {
+      setOcrProcessing(false);
+      setOcrResults([
+        { sku: "FM-010", name: "Harina T-55 25kg", qty: 15, price: 42.00 },
+        { sku: "DF-001", name: "Mantequilla 1lb", qty: 30, price: 4.80 },
+        { sku: "HC-005", name: "Huevos Grado A (caja 30)", qty: 10, price: 17.00 },
+      ]);
+    }, 2500);
+  }, []);
+
+  const confirmOCR = () => {
+    if (!ocrResults) return;
+    const po: PO = {
+      id: `PO-${121 + pos.length}`,
+      vendor: "Proveedor (OCR)",
+      items: ocrResults.map((i) => ({ sku: i.sku, name: i.name, qtyOrdered: i.qty, qtyReceived: 0, price: i.price })),
+      total: ocrResults.reduce((s, i) => s + i.qty * i.price, 0),
+      date: "12 Abr",
+      status: "borrador",
+    };
+    setPOs((prev) => [po, ...prev]);
+    setOcrResults(null);
+    toast.success(`${po.id} creada desde factura OCR`);
+  };
 
   return (
-    <div className="flex flex-col items-end gap-0.5">
-      <button
-        onClick={handleRecibir}
-        disabled={loading}
-        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md
-          bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 transition-colors"
-      >
-        {loading ? <Loader2 size={12} className="animate-spin" /> : <Truck size={12} />}
-        {loading ? 'Procesando…' : 'Marcar recibido'}
-      </button>
-      {error && <span className="text-xs text-red-500">{error}</span>}
-    </div>
-  )
-}
-
-// ─── OCR Result table ─────────────────────────────────────────────────────────
-
-function OCRResultTable({
-  result,
-  onEdit,
-  onConfirm,
-  onReset,
-}: {
-  result:    OCRResult
-  onEdit:    (updated: OCRResult) => void
-  onConfirm: () => void
-  onReset:   () => void
-}) {
-  const [loading, setLoading] = useState(false)
-  const [error,   setError]   = useState<string | null>(null)
-  const [data,    setData]    = useState<OCRResult>(result)
-
-  const updateItem = (i: number, field: keyof OCRItem, val: string) => {
-    const items = [...data.items]
-    const num   = parseFloat(val) || 0
-    items[i] = {
-      ...items[i],
-      [field]: field === 'descripcion' ? val : num,
-      total:   field === 'cantidad'        ? num * items[i].precio_unitario
-              : field === 'precio_unitario' ? items[i].cantidad * num
-              : items[i].total,
-    }
-    const subtotal = items.reduce((s, it) => s + it.total, 0)
-    setData({ ...data, items, subtotal, total: subtotal + data.impuesto })
-    onEdit({ ...data, items, subtotal, total: subtotal + data.impuesto })
-  }
-
-  const handleConfirm = async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      const res = await fetch('/api/dashboard/compra/confirmar', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify(data),
-      })
-      const json = await res.json()
-      if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`)
-      onConfirm()
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Error al guardar PO')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  return (
-    <div className="space-y-4">
-      {/* Invoice header */}
-      <div className="bg-slate-50 rounded-lg border border-slate-200 p-4 grid grid-cols-2 sm:grid-cols-3 gap-3">
-        {[
-          { label: 'Proveedor',       value: data.proveedor      },
-          { label: 'Nº Factura',      value: data.numero_factura },
-          { label: 'Fecha Factura',   value: data.fecha          },
-        ].map(({ label, value }) => (
-          <div key={label}>
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">{label}</p>
-            <p className="text-sm font-medium text-slate-700 mt-0.5">{value}</p>
+    <DashboardLayout>
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 animate-fade-in">
+          <div>
+            <h1 className="text-2xl font-bold">Compras & Recepciones</h1>
+            <p className="text-sm text-muted-foreground">Órdenes de compra, recepciones y facturas</p>
           </div>
-        ))}
-      </div>
-
-      {/* Items table — editable */}
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="bg-slate-50 border-y border-slate-200">
-            <tr>
-              <th className="px-3 py-2 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Descripción</th>
-              <th className="px-3 py-2 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider w-20">Cant.</th>
-              <th className="px-3 py-2 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider w-28">Precio Unit.</th>
-              <th className="px-3 py-2 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider w-24">Total</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100 bg-white">
-            {data.items.map((item, i) => (
-              <tr key={i} className="hover:bg-slate-50">
-                <td className="px-3 py-2">
-                  <input
-                    type="text"
-                    value={item.descripcion}
-                    onChange={(e) => updateItem(i, 'descripcion', e.target.value)}
-                    className="w-full text-sm text-slate-700 bg-transparent border-b border-transparent
-                      hover:border-slate-300 focus:border-indigo-400 focus:outline-none py-0.5"
-                  />
-                </td>
-                <td className="px-3 py-2">
-                  <input
-                    type="number"
-                    value={item.cantidad}
-                    onChange={(e) => updateItem(i, 'cantidad', e.target.value)}
-                    className="w-full text-sm text-right text-slate-700 bg-transparent border-b border-transparent
-                      hover:border-slate-300 focus:border-indigo-400 focus:outline-none py-0.5"
-                  />
-                </td>
-                <td className="px-3 py-2">
-                  <input
-                    type="number"
-                    step="0.01"
-                    value={item.precio_unitario}
-                    onChange={(e) => updateItem(i, 'precio_unitario', e.target.value)}
-                    className="w-full text-sm text-right text-slate-700 bg-transparent border-b border-transparent
-                      hover:border-slate-300 focus:border-indigo-400 focus:outline-none py-0.5"
-                  />
-                </td>
-                <td className="px-3 py-2 text-right text-sm font-medium text-slate-700">
-                  ${item.total.toFixed(2)}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-          <tfoot className="bg-slate-50 border-t-2 border-slate-200">
-            <tr>
-              <td colSpan={3} className="px-3 py-2 text-right text-xs text-slate-500">Subtotal</td>
-              <td className="px-3 py-2 text-right text-sm text-slate-700">${data.subtotal.toFixed(2)}</td>
-            </tr>
-            <tr>
-              <td colSpan={3} className="px-3 py-2 text-right text-xs text-slate-500">IVU / Impuesto</td>
-              <td className="px-3 py-2 text-right text-sm text-slate-700">${data.impuesto.toFixed(2)}</td>
-            </tr>
-            <tr>
-              <td colSpan={3} className="px-3 py-2 text-right text-sm font-bold text-slate-700">TOTAL</td>
-              <td className="px-3 py-2 text-right text-sm font-bold text-slate-800">${data.total.toFixed(2)}</td>
-            </tr>
-          </tfoot>
-        </table>
-      </div>
-
-      <p className="text-xs text-slate-400 flex items-center gap-1">
-        <AlertTriangle size={11} /> Revisa y corrige antes de confirmar — los valores son editables.
-      </p>
-
-      {error && (
-        <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-          <XCircle size={14} />{error}
+          <Button size="sm" className="gap-2 bg-primary hover:bg-primary/90 active:scale-95 transition-all" onClick={() => setNewModal(true)}>
+            <Plus className="w-3.5 h-3.5" /> Nueva Compra
+          </Button>
         </div>
-      )}
 
-      <div className="flex gap-2">
-        <button
-          onClick={onReset}
-          className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg
-            border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
-        >
-          <RotateCcw size={14} /> Nueva foto
-        </button>
-        <button
-          onClick={handleConfirm}
-          disabled={loading}
-          className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2 text-sm font-medium
-            rounded-lg bg-indigo-600 text-white hover:bg-indigo-700
-            disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-        >
-          {loading ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle size={14} />}
-          {loading ? 'Guardando PO…' : 'Confirmar PO'}
-        </button>
-      </div>
-    </div>
-  )
-}
-
-// ─── Tab: Nueva Compra ────────────────────────────────────────────────────────
-
-function NuevaCompraTab() {
-  const fileRef = useRef<HTMLInputElement>(null)
-
-  type UIState = 'idle' | 'preview' | 'processing' | 'result' | 'success'
-
-  const [uiState,    setUiState]    = useState<UIState>('idle')
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
-  const [ocrResult,  setOcrResult]  = useState<OCRResult | null>(null)
-  const [error,      setError]      = useState<string | null>(null)
-  const [imageFile,  setImageFile]  = useState<File | null>(null)
-
-  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setImageFile(file)
-    setPreviewUrl(URL.createObjectURL(file))
-    setUiState('preview')
-    setError(null)
-    setOcrResult(null)
-  }
-
-  const handleOCR = async () => {
-    if (!imageFile) return
-    setUiState('processing')
-    setError(null)
-    try {
-      const formData = new FormData()
-      formData.append('image', imageFile)
-
-      const res = await fetch('/api/dashboard/compra/ocr', {
-        method: 'POST',
-        body:   formData,
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`)
-
-      setOcrResult(data.result)
-      setUiState('result')
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Error al procesar OCR')
-      setUiState('preview')
-    }
-  }
-
-  const handleReset = () => {
-    setUiState('idle')
-    setPreviewUrl(null)
-    setOcrResult(null)
-    setImageFile(null)
-    setError(null)
-    if (fileRef.current) fileRef.current.value = ''
-  }
-
-  if (uiState === 'success') {
-    return (
-      <div className="flex flex-col items-center justify-center py-16 gap-4 text-center">
-        <div className="w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center">
-          <CheckCircle size={32} className="text-emerald-500" />
+        {/* Stat chips */}
+        <div className="flex flex-wrap gap-2 animate-fade-in">
+          <Badge variant="outline" className="bg-info/10 text-info border-info/30 gap-1.5 py-1.5 px-3 text-xs">
+            <ShoppingCart className="w-3.5 h-3.5" /> Órdenes Abiertas: <span className="font-bold">{openCount}</span>
+          </Badge>
+          <Badge variant="outline" className="bg-warning/10 text-warning border-warning/30 gap-1.5 py-1.5 px-3 text-xs">
+            <PackageCheck className="w-3.5 h-3.5" /> Pendiente Recepción: <span className="font-bold">{pendingRecv}</span>
+          </Badge>
+          <Badge variant="outline" className="bg-success/10 text-success border-success/30 gap-1.5 py-1.5 px-3 text-xs">
+            Gasto del Mes: <span className="font-bold">${monthSpend.toLocaleString()}</span>
+          </Badge>
         </div>
-        <div>
-          <p className="text-lg font-bold text-slate-800">PO creado exitosamente</p>
-          <p className="text-sm text-slate-500 mt-1">La orden de compra fue guardada en Airtable via WF4.</p>
-        </div>
-        <button
-          onClick={handleReset}
-          className="flex items-center gap-2 px-5 py-2 text-sm font-medium rounded-lg
-            bg-indigo-600 text-white hover:bg-indigo-700 transition-colors"
-        >
-          <Camera size={14} /> Procesar otra factura
-        </button>
-      </div>
-    )
-  }
 
-  return (
-    <div className="space-y-5 max-w-2xl">
-      {/* Hidden file input */}
-      <input
-        ref={fileRef}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        className="hidden"
-        onChange={handleFile}
-      />
-
-      {/* Idle state — big camera button */}
-      {uiState === 'idle' && (
-        <button
-          onClick={() => fileRef.current?.click()}
-          className="w-full flex flex-col items-center justify-center gap-3 py-14 px-6
-            border-2 border-dashed border-slate-300 rounded-xl
-            hover:border-indigo-400 hover:bg-indigo-50 transition-colors group"
-        >
-          <div className="w-16 h-16 rounded-full bg-slate-100 group-hover:bg-indigo-100
-            flex items-center justify-center transition-colors"
-          >
-            <Camera size={28} className="text-slate-400 group-hover:text-indigo-500 transition-colors" />
-          </div>
-          <div className="text-center">
-            <p className="text-base font-semibold text-slate-700">Tomar foto de factura</p>
-            <p className="text-sm text-slate-400 mt-1">
-              Abre la cámara en móvil · Selecciona archivo en desktop
-            </p>
-          </div>
-        </button>
-      )}
-
-      {/* Preview state */}
-      {(uiState === 'preview' || uiState === 'processing') && previewUrl && (
-        <div className="space-y-4">
-          <div className="relative rounded-xl overflow-hidden border border-slate-200 bg-black">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={previewUrl}
-              alt="Factura capturada"
-              className="w-full max-h-72 object-contain"
-            />
-          </div>
-
-          {error && (
-            <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50
-              border border-red-200 rounded-lg px-3 py-2"
-            >
-              <XCircle size={14} />{error}
-            </div>
-          )}
-
-          <div className="flex gap-2">
-            <button
-              onClick={handleReset}
-              disabled={uiState === 'processing'}
-              className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg
-                border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40 transition-colors"
-            >
-              <RotateCcw size={14} /> Retomar
-            </button>
-            <button
-              onClick={handleOCR}
-              disabled={uiState === 'processing'}
-              className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium
-                rounded-lg bg-indigo-600 text-white hover:bg-indigo-700
-                disabled:opacity-50 transition-colors"
-            >
-              {uiState === 'processing' ? (
-                <>
-                  <Loader2 size={14} className="animate-spin" />
-                  Procesando factura…
-                </>
-              ) : (
-                <>
-                  <FileText size={14} />
-                  Procesar con OCR
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Result state */}
-      {uiState === 'result' && ocrResult && (
-        <OCRResultTable
-          result={ocrResult}
-          onEdit={setOcrResult}
-          onConfirm={() => setUiState('success')}
-          onReset={handleReset}
-        />
-      )}
-    </div>
-  )
-}
-
-// ─── Tab: Historial POs ───────────────────────────────────────────────────────
-
-function HistorialPOsTab() {
-  const [pos,   setPOs]    = useState<PO[]>(POS_MOCK)
-  const [open,  setOpen]   = useState<string | null>(null)
-
-  const markRecibido = (id: string) =>
-    setPOs((prev) => prev.map((p) => p.id === id ? { ...p, estado: 'recibido' } : p))
-
-  const pendientes = pos.filter((p) => p.estado === 'pendiente').length
-
-  return (
-    <div className="space-y-4 max-w-4xl">
-      {pendientes > 0 && (
-        <div className="flex items-center gap-2 text-sm text-amber-700 bg-amber-50
-          border border-amber-200 rounded-lg px-3 py-2"
-        >
-          <AlertTriangle size={14} />
-          {pendientes} PO{pendientes !== 1 ? 's' : ''} pendiente{pendientes !== 1 ? 's' : ''} de recepción
-        </div>
-      )}
-
-      <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50 border-b border-slate-200">
-              <tr>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">PO</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Proveedor</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Fecha</th>
-                <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Total</th>
-                <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wider text-slate-500">Items</th>
-                <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">Estado</th>
-                <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Acción</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {pos.map((po) => (
-                <>
-                  <tr
-                    key={po.id}
-                    className="hover:bg-slate-50 transition-colors cursor-pointer"
-                    onClick={() => setOpen(open === po.id ? null : po.id)}
-                  >
-                    <td className="px-4 py-3 font-mono text-xs font-bold text-slate-700">
-                      <span className="flex items-center gap-1">
-                        {open === po.id
-                          ? <ChevronUp   size={12} className="text-slate-400" />
-                          : <ChevronDown size={12} className="text-slate-400" />}
-                        {po.numero}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-slate-700">{po.proveedor}</td>
-                    <td className="px-4 py-3 text-slate-500 text-xs whitespace-nowrap">{po.fecha}</td>
-                    <td className="px-4 py-3 text-right font-semibold text-slate-800">
-                      ${po.total.toFixed(2)}
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <span className="inline-flex items-center justify-center w-6 h-6 rounded-full
-                        bg-slate-100 text-slate-600 text-xs font-semibold"
-                      >
-                        {po.items}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3"><StatusBadge estado={po.estado} /></td>
-                    <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
-                      <RecibirButton po={po} onRecibido={markRecibido} />
-                    </td>
-                  </tr>
-
-                  {/* Expandable detail row */}
-                  {open === po.id && (
-                    <tr key={`${po.id}-detail`} className="bg-indigo-50">
-                      <td colSpan={7} className="px-6 py-3">
-                        <p className="text-xs text-slate-500">
-                          <span className="font-semibold text-slate-700">{po.numero}</span> ·{' '}
-                          {po.proveedor} · {po.items} items · Total ${po.total.toFixed(2)}
-                        </p>
-                        <p className="text-xs text-slate-400 mt-0.5">
-                          Detalle de líneas disponible cuando se conecte Airtable vía React Query.
-                        </p>
-                      </td>
+        {/* Main table */}
+        {loading ? (
+          <TableSkeleton rows={5} cols={7} />
+        ) : pos.length === 0 ? (
+          <EmptyState icon={<ShoppingCart className="w-7 h-7 text-muted-foreground" />} title="Sin órdenes de compra" description="Crea tu primera orden de compra." />
+        ) : (
+          <Card className="overflow-hidden animate-fade-in">
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b bg-muted/50">
+                      <th className="text-left p-4 font-semibold text-muted-foreground">PO#</th>
+                      <th className="text-left p-4 font-semibold text-muted-foreground">Proveedor</th>
+                      <th className="text-left p-4 font-semibold text-muted-foreground">Productos</th>
+                      <th className="text-left p-4 font-semibold text-muted-foreground">Monto</th>
+                      <th className="text-left p-4 font-semibold text-muted-foreground hidden sm:table-cell">Fecha</th>
+                      <th className="text-left p-4 font-semibold text-muted-foreground">Estado</th>
+                      <th className="text-left p-4 font-semibold text-muted-foreground">Acciones</th>
                     </tr>
+                  </thead>
+                  <tbody>
+                    {pos.map((po) => (
+                      <>
+                        <tr key={po.id} className="border-b hover:bg-muted/30 transition-colors">
+                          <td className="p-4 font-semibold">{po.id}</td>
+                          <td className="p-4">{po.vendor}</td>
+                          <td className="p-4">
+                            <Badge variant="outline" className="text-xs">{po.items.length}</Badge>
+                          </td>
+                          <td className="p-4 font-semibold">${po.total.toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
+                          <td className="p-4 text-muted-foreground hidden sm:table-cell">{po.date}</td>
+                          <td className="p-4">
+                            <Badge variant="outline" className={`text-[10px] ${statusStyle[po.status]}`}>
+                              {statusLabel[po.status]}
+                            </Badge>
+                          </td>
+                          <td className="p-4">
+                            <div className="flex gap-1.5">
+                              {po.status === "enviada" && (
+                                <Button variant="outline" size="sm" className="text-xs h-7 px-2 hover:bg-success/10 hover:text-success active:scale-95 transition-all" onClick={() => openReceive(po)}>
+                                  Recibir
+                                </Button>
+                              )}
+                              <Button variant="ghost" size="sm" className="text-xs h-7 px-2 active:scale-95 transition-all" onClick={() => setExpandedRow(expandedRow === po.id ? null : po.id)}>
+                                <Eye className="w-3.5 h-3.5 mr-1" />
+                                Ver
+                                <ChevronDown className={`w-3 h-3 ml-1 transition-transform ${expandedRow === po.id ? "rotate-180" : ""}`} />
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                        {expandedRow === po.id && (
+                          <tr key={`${po.id}-detail`} className="border-b">
+                            <td colSpan={7} className="p-0">
+                              <div className="bg-muted/20 p-4">
+                                <p className="text-xs font-semibold text-muted-foreground mb-2">Líneas de {po.id}</p>
+                                <table className="w-full text-xs">
+                                  <thead>
+                                    <tr className="border-b">
+                                      <th className="text-left p-2 font-semibold text-muted-foreground">SKU</th>
+                                      <th className="text-left p-2 font-semibold text-muted-foreground">Producto</th>
+                                      <th className="text-left p-2 font-semibold text-muted-foreground">Cant. Ordenada</th>
+                                      <th className="text-left p-2 font-semibold text-muted-foreground">Cant. Recibida</th>
+                                      <th className="text-left p-2 font-semibold text-muted-foreground">Diferencia</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {po.items.map((item) => {
+                                      const diff = item.qtyReceived - item.qtyOrdered;
+                                      return (
+                                        <tr key={item.sku} className="border-b last:border-0">
+                                          <td className="p-2 font-mono">{item.sku}</td>
+                                          <td className="p-2">{item.name}</td>
+                                          <td className="p-2">{item.qtyOrdered}</td>
+                                          <td className="p-2">{item.qtyReceived}</td>
+                                          <td className={`p-2 font-semibold ${diff < 0 ? "text-destructive" : diff === 0 ? "text-muted-foreground" : "text-success"}`}>
+                                            {diff > 0 ? `+${diff}` : diff}
+                                          </td>
+                                        </tr>
+                                      );
+                                    })}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* OCR Section */}
+        <Card className="animate-fade-in">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-primary" /> Captura de Factura con IA
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div
+              className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors cursor-pointer ${ocrDragging ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"}`}
+              onDragOver={(e) => { e.preventDefault(); setOcrDragging(true); }}
+              onDragLeave={() => setOcrDragging(false)}
+              onDrop={handleOCRDrop}
+              onClick={() => {
+                // simulate file select
+                setOcrProcessing(true);
+                setOcrResults(null);
+                setTimeout(() => {
+                  setOcrProcessing(false);
+                  setOcrResults([
+                    { sku: "FM-010", name: "Harina T-55 25kg", qty: 15, price: 42.00 },
+                    { sku: "DF-001", name: "Mantequilla 1lb", qty: 30, price: 4.80 },
+                    { sku: "HC-005", name: "Huevos Grado A (caja 30)", qty: 10, price: 17.00 },
+                  ]);
+                }, 2500);
+              }}
+            >
+              <Upload className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
+              <p className="text-sm font-medium">Arrastra un PDF o imagen de factura aquí</p>
+              <p className="text-xs text-muted-foreground mt-1">o haz clic para seleccionar archivo</p>
+            </div>
+
+            {ocrProcessing && (
+              <div className="space-y-3 p-4 rounded-lg bg-muted/30">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Sparkles className="w-4 h-4 text-primary animate-pulse" /> Procesando con IA...
+                </div>
+                <div className="space-y-2">
+                  <Skeleton className="h-4 w-3/4" />
+                  <Skeleton className="h-4 w-1/2" />
+                  <Skeleton className="h-4 w-2/3" />
+                </div>
+              </div>
+            )}
+
+            {ocrResults && (
+              <div className="space-y-3">
+                <p className="text-sm font-semibold">Líneas extraídas — revisa antes de confirmar</p>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b bg-muted/50">
+                        <th className="text-left p-2 font-semibold text-muted-foreground">SKU</th>
+                        <th className="text-left p-2 font-semibold text-muted-foreground">Producto</th>
+                        <th className="text-left p-2 font-semibold text-muted-foreground">Cantidad</th>
+                        <th className="text-left p-2 font-semibold text-muted-foreground">Precio</th>
+                        <th className="text-left p-2 font-semibold text-muted-foreground">Subtotal</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {ocrResults.map((item, i) => (
+                        <tr key={i} className="border-b last:border-0">
+                          <td className="p-2 font-mono">{item.sku}</td>
+                          <td className="p-2">{item.name}</td>
+                          <td className="p-2">{item.qty}</td>
+                          <td className="p-2">${item.price.toFixed(2)}</td>
+                          <td className="p-2 font-semibold">${(item.qty * item.price).toFixed(2)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="bg-muted/30">
+                        <td colSpan={4} className="p-2 text-right font-semibold">Total:</td>
+                        <td className="p-2 font-bold">${ocrResults.reduce((s, i) => s + i.qty * i.price, 0).toFixed(2)}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+                <div className="flex gap-2">
+                  <Button size="sm" className="bg-primary hover:bg-primary/90 active:scale-95 transition-all" onClick={confirmOCR}>
+                    Confirmar y crear PO
+                  </Button>
+                  <Button variant="outline" size="sm" className="active:scale-95 transition-all" onClick={() => setOcrResults(null)}>
+                    Descartar
+                  </Button>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Receive Modal */}
+      <Dialog open={!!receiveModal} onOpenChange={(open) => { if (!open) setReceiveModal(null); }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Recibir {receiveModal?.id}</DialogTitle>
+            <DialogDescription>Ingresa las cantidades recibidas para cada línea</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 max-h-[60vh] overflow-y-auto">
+            {receiveModal?.items.map((item, i) => {
+              const diff = (receiveQtys[i] || 0) - item.qtyOrdered;
+              return (
+                <div key={item.sku} className="flex items-center gap-3 p-3 rounded-lg bg-muted/30">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{item.name}</p>
+                    <p className="text-xs text-muted-foreground">{item.sku} · Ordenado: {item.qtyOrdered}</p>
+                  </div>
+                  <Input
+                    type="number"
+                    className="w-20 text-center"
+                    min={0}
+                    value={receiveQtys[i] ?? 0}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value) || 0;
+                      setReceiveQtys((prev) => prev.map((q, j) => j === i ? val : q));
+                    }}
+                  />
+                  {diff !== 0 && (
+                    <span className={`text-xs font-semibold min-w-[40px] text-right ${diff < 0 ? "text-destructive" : "text-success"}`}>
+                      {diff > 0 ? `+${diff}` : diff}
+                    </span>
                   )}
-                </>
+                </div>
+              );
+            })}
+          </div>
+          <Button className="w-full bg-primary hover:bg-primary/90 active:scale-95 transition-all mt-2" onClick={confirmReceive}>
+            Confirmar Recepción
+          </Button>
+        </DialogContent>
+      </Dialog>
+
+      {/* New PO Modal */}
+      <Dialog open={newModal} onOpenChange={(open) => { if (!open) setNewModal(false); }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Nueva Orden de Compra</DialogTitle>
+            <DialogDescription>Selecciona proveedor y agrega líneas</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 max-h-[60vh] overflow-y-auto">
+            <Select value={newVendor} onValueChange={setNewVendor}>
+              <SelectTrigger>
+                <SelectValue placeholder="Seleccionar proveedor" />
+              </SelectTrigger>
+              <SelectContent>
+                {vendors.map((v) => <SelectItem key={v} value={v}>{v}</SelectItem>)}
+              </SelectContent>
+            </Select>
+
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-muted-foreground">Líneas</p>
+              {newItems.map((item, i) => (
+                <div key={i} className="grid grid-cols-[1fr_1.5fr_0.7fr_0.7fr_auto] gap-2 items-center">
+                  <Input placeholder="SKU" value={item.sku} onChange={(e) => updateNewItem(i, "sku", e.target.value)} className="text-xs" />
+                  <Input placeholder="Nombre" value={item.name} onChange={(e) => updateNewItem(i, "name", e.target.value)} className="text-xs" />
+                  <Input type="number" placeholder="Cant" min={1} value={item.qty} onChange={(e) => updateNewItem(i, "qty", parseInt(e.target.value) || 0)} className="text-xs" />
+                  <Input type="number" placeholder="Precio" min={0} step={0.01} value={item.price} onChange={(e) => updateNewItem(i, "price", parseFloat(e.target.value) || 0)} className="text-xs" />
+                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive" onClick={() => removeNewItem(i)} disabled={newItems.length <= 1}>
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
               ))}
-            </tbody>
-          </table>
-        </div>
+              <Button variant="outline" size="sm" className="text-xs gap-1 active:scale-95 transition-all" onClick={addNewItem}>
+                <Plus className="w-3 h-3" /> Agregar línea
+              </Button>
+            </div>
 
-        <div className="px-4 py-3 border-t border-slate-100 bg-slate-50 flex justify-between">
-          <p className="text-xs text-slate-400">{pos.length} órdenes de compra</p>
-          <p className="text-xs text-slate-400">
-            Total histórico:{' '}
-            <span className="font-semibold text-slate-700">
-              ${pos.reduce((s, p) => s + p.total, 0).toFixed(2)}
-            </span>
-          </p>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ─── Page ─────────────────────────────────────────────────────────────────────
-
-type Tab = 'nueva' | 'historial'
-
-export default function ComprasPage() {
-  const [tab, setTab] = useState<Tab>('nueva')
-
-  const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
-    { id: 'nueva',    label: 'Nueva Compra', icon: <Camera  size={14} /> },
-    { id: 'historial', label: 'Historial POs', icon: <Package size={14} /> },
-  ]
-
-  return (
-    <div className="space-y-5 max-w-5xl">
-      {/* Header */}
-      <div>
-        <h1 className="text-xl font-bold text-slate-800">Compras</h1>
-        <p className="text-sm text-slate-500 mt-0.5">
-          Facturas de proveedor + órdenes de compra (WF4 + WF2)
-        </p>
-      </div>
-
-      {/* Tabs */}
-      <div className="flex gap-1 border-b border-slate-200">
-        {TABS.map((t) => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium
-              border-b-2 -mb-px transition-colors
-              ${tab === t.id
-                ? 'border-indigo-600 text-indigo-600'
-                : 'border-transparent text-slate-500 hover:text-slate-700'}`}
-          >
-            {t.icon}{t.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Tab content */}
-      {tab === 'nueva'    && <NuevaCompraTab />}
-      {tab === 'historial' && <HistorialPOsTab />}
-    </div>
-  )
+            <div className="flex justify-between items-center pt-2 border-t">
+              <span className="text-sm font-semibold">Total:</span>
+              <span className="text-lg font-bold">${newTotal.toFixed(2)}</span>
+            </div>
+          </div>
+          <Button className="w-full bg-primary hover:bg-primary/90 active:scale-95 transition-all" onClick={createPO}>
+            Crear Orden de Compra
+          </Button>
+        </DialogContent>
+      </Dialog>
+    </DashboardLayout>
+  );
 }
