@@ -45,7 +45,6 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
     return () => clearTimeout(t);
   }, [location.pathname]);
 
-  // On first render show children immediately
   useEffect(() => {
     setDisplayChildren(children);
   }, [children]);
@@ -59,7 +58,7 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
           <header className="h-14 flex items-center border-b bg-card px-4 sticky top-0 z-20">
             <SidebarTrigger className="mr-4" />
             <div className="flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-success animate-pulse" />
+              <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
               <span className="text-xs text-muted-foreground font-medium hidden sm:inline">Clover POS sincronizado</span>
             </div>
 

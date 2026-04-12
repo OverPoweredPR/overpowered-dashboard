@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -7,34 +7,14 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Search, AlertTriangle, Package, ChevronDown, CheckCircle2 } from "lucide-react";
+import { TableSkeleton } from "@/components/Skeletons";
+import { EmptyState } from "@/components/EmptyState";
+import { Search, AlertTriangle, Package, ChevronDown, CheckCircle2, BarChart3 } from "lucide-react";
 import { toast } from "sonner";
 
-interface Product {
-  sku: string;
-  name: string;
-  stock: number;
-  min: number;
-  updatedAt: string;
-}
-
-interface Discrepancy {
-  id: string;
-  sku: string;
-  product: string;
-  shopify: number;
-  airtable: number;
-  diff: number;
-  acknowledged: boolean;
-}
-
-interface ReconRecord {
-  date: string;
-  errors: number;
-  warnings: number;
-  total: number;
-  status: "OK" | "Con errores" | "Pendiente";
-}
+interface Product { sku: string; name: string; stock: number; min: number; updatedAt: string; }
+interface Discrepancy { id: string; sku: string; product: string; shopify: number; airtable: number; diff: number; acknowledged: boolean; }
+interface ReconRecord { date: string; errors: number; warnings: number; total: number; status: "OK" | "Con errores" | "Pendiente"; }
 
 const products: Product[] = [
   { sku: "MAT-001", name: "Harina de trigo", stock: 55, min: 50, updatedAt: "2026-04-12 06:30" },
@@ -66,7 +46,7 @@ const reconHistory: ReconRecord[] = [
 function getStatus(stock: number, min: number) {
   if (stock === 0) return { dot: "bg-destructive", label: "Sin stock" };
   if (stock <= min) return { dot: "bg-warning", label: "Bajo" };
-  return { dot: "bg-success", label: "Normal" };
+  return { dot: "bg-primary", label: "Normal" };
 }
 
 export default function Inventario() {
@@ -76,6 +56,8 @@ export default function Inventario() {
   const [adjustQty, setAdjustQty] = useState("");
   const [adjustReason, setAdjustReason] = useState("");
   const [reconOpen, setReconOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => { const t = setTimeout(() => setLoading(false), 500); return () => clearTimeout(t); }, []);
 
   const zeroStockProducts = products.filter((p) => p.stock === 0);
   const filtered = products.filter(
@@ -99,10 +81,9 @@ export default function Inventario() {
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 animate-fade-in">
           <div>
-            <h1 className="text-2xl font-bold">Inventario</h1>
+            <h1 className="page-title">Inventario</h1>
             <p className="text-sm text-muted-foreground">Control de materias primas y reconciliación</p>
           </div>
           <div className="relative w-full sm:w-64">
@@ -111,89 +92,86 @@ export default function Inventario() {
           </div>
         </div>
 
-        {/* Zero stock alert */}
         {zeroStockProducts.length > 0 && (
-          <div className="flex items-center gap-3 rounded-lg border-2 border-destructive/50 bg-destructive/10 p-4">
+          <div className="flex items-center gap-3 rounded-lg border-2 border-destructive/50 bg-destructive/10 p-4 animate-fade-in">
             <AlertTriangle className="w-5 h-5 text-destructive shrink-0" />
             <div>
               <p className="text-sm font-semibold text-destructive">¡Alerta de stock cero!</p>
-              <p className="text-xs text-muted-foreground">
-                {zeroStockProducts.map((p) => p.name).join(", ")} — requieren reabastecimiento inmediato.
-              </p>
+              <p className="text-xs text-muted-foreground">{zeroStockProducts.map((p) => p.name).join(", ")} — requieren reabastecimiento inmediato.</p>
             </div>
           </div>
         )}
 
-        {/* Product Table */}
-        <Card className="overflow-hidden">
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b bg-muted/50">
-                    <th className="text-left p-4 font-semibold text-muted-foreground">SKU</th>
-                    <th className="text-left p-4 font-semibold text-muted-foreground">Producto</th>
-                    <th className="text-left p-4 font-semibold text-muted-foreground">Stock Actual</th>
-                    <th className="text-left p-4 font-semibold text-muted-foreground hidden md:table-cell">Stock Mínimo</th>
-                    <th className="text-left p-4 font-semibold text-muted-foreground">Estado</th>
-                    <th className="text-left p-4 font-semibold text-muted-foreground hidden sm:table-cell">Última Act.</th>
-                    <th className="p-4"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.map((p) => {
-                    const st = getStatus(p.stock, p.min);
-                    return (
-                      <tr key={p.sku} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
-                        <td className="p-4 font-mono text-xs text-muted-foreground">{p.sku}</td>
-                        <td className="p-4 font-medium">{p.name}</td>
-                        <td className="p-4 font-bold">{p.stock}</td>
-                        <td className="p-4 text-muted-foreground hidden md:table-cell">{p.min}</td>
-                        <td className="p-4">
-                          <div className="flex items-center gap-2">
-                            <div className={`w-2.5 h-2.5 rounded-full ${st.dot}`} />
-                            <span className="text-xs font-medium">{st.label}</span>
-                          </div>
-                        </td>
-                        <td className="p-4 text-xs text-muted-foreground hidden sm:table-cell">{p.updatedAt}</td>
-                        <td className="p-4">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="text-xs gap-1"
-                            onClick={() => { setAdjustModal(p); setAdjustQty(String(p.stock)); setAdjustReason(""); }}
-                          >
-                            <Package className="w-3.5 h-3.5" /> Ajustar
-                          </Button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
+        {loading ? (
+          <TableSkeleton rows={8} cols={6} />
+        ) : filtered.length === 0 ? (
+          <EmptyState icon={<BarChart3 className="w-7 h-7 text-muted-foreground" />} title="Sin productos" description="No se encontraron productos con ese criterio." />
+        ) : (
+          <Card className="overflow-hidden shadow-sm animate-fade-in">
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b">
+                      <th className="table-header">SKU</th>
+                      <th className="table-header">Producto</th>
+                      <th className="table-header">Stock Actual</th>
+                      <th className="table-header hidden md:table-cell">Stock Mínimo</th>
+                      <th className="table-header">Estado</th>
+                      <th className="table-header hidden sm:table-cell">Última Act.</th>
+                      <th className="table-header"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.map((p) => {
+                      const st = getStatus(p.stock, p.min);
+                      return (
+                        <tr key={p.sku} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
+                          <td className="p-4 font-mono text-xs text-muted-foreground">{p.sku}</td>
+                          <td className="p-4 font-medium">{p.name}</td>
+                          <td className="p-4 font-bold">{p.stock}</td>
+                          <td className="p-4 text-muted-foreground hidden md:table-cell">{p.min}</td>
+                          <td className="p-4">
+                            <div className="flex items-center gap-2">
+                              <div className={`w-2.5 h-2.5 rounded-full ${st.dot}`} />
+                              <span className="text-xs font-medium">{st.label}</span>
+                            </div>
+                          </td>
+                          <td className="p-4 text-xs text-muted-foreground hidden sm:table-cell">{p.updatedAt}</td>
+                          <td className="p-4">
+                            <Button variant="outline" size="sm" className="text-xs gap-1 hover:bg-primary/10 hover:border-primary/30 hover:text-primary active:scale-95 transition-all" onClick={() => { setAdjustModal(p); setAdjustQty(String(p.stock)); setAdjustReason(""); }}>
+                              <Package className="w-3.5 h-3.5" /> Ajustar
+                            </Button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Discrepancies */}
-        <Card>
+        <Card className="shadow-sm animate-fade-in" style={{ animationDelay: "100ms" }}>
           <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
+            <CardTitle className="section-label normal-case tracking-normal text-base flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 text-warning" /> Discrepancias Shopify vs Airtable
-              <Badge variant="outline" className="ml-auto">{discrepancies.filter((d) => !d.acknowledged).length} pendientes</Badge>
+              <Badge variant="outline" className="ml-auto text-[10px] px-2 py-0.5">{discrepancies.filter((d) => !d.acknowledged).length} pendientes</Badge>
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b bg-muted/50">
-                    <th className="text-left p-4 font-semibold text-muted-foreground">SKU</th>
-                    <th className="text-left p-4 font-semibold text-muted-foreground">Producto</th>
-                    <th className="text-left p-4 font-semibold text-muted-foreground">Shopify</th>
-                    <th className="text-left p-4 font-semibold text-muted-foreground">Airtable</th>
-                    <th className="text-left p-4 font-semibold text-muted-foreground">Diff</th>
-                    <th className="p-4"></th>
+                  <tr className="border-b">
+                    <th className="table-header">SKU</th>
+                    <th className="table-header">Producto</th>
+                    <th className="table-header">Shopify</th>
+                    <th className="table-header">Airtable</th>
+                    <th className="table-header">Diferencia</th>
+                    <th className="table-header"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -204,16 +182,16 @@ export default function Inventario() {
                       <td className="p-4">{d.shopify}</td>
                       <td className="p-4">{d.airtable}</td>
                       <td className="p-4">
-                        <Badge variant={d.diff > 0 ? "destructive" : "secondary"} className="text-xs">
+                        <Badge variant={d.diff > 0 ? "destructive" : "secondary"} className="text-[10px] px-2 py-0.5">
                           {d.diff > 0 ? "+" : ""}{d.diff}
                         </Badge>
                       </td>
                       <td className="p-4">
                         {d.acknowledged ? (
-                          <Badge variant="outline" className="text-xs gap-1"><CheckCircle2 className="w-3 h-3" /> Reconocido</Badge>
+                          <Badge variant="outline" className="text-[10px] gap-1 px-2 py-0.5"><CheckCircle2 className="w-3 h-3" /> Reconocido</Badge>
                         ) : (
-                          <Button variant="outline" size="sm" className="text-xs" onClick={() => handleAcknowledge(d.id)}>
-                            Acknowledge
+                          <Button variant="outline" size="sm" className="text-xs hover:bg-primary/10 hover:border-primary/30 active:scale-95 transition-all" onClick={() => handleAcknowledge(d.id)}>
+                            Reconocer
                           </Button>
                         )}
                       </td>
@@ -227,12 +205,12 @@ export default function Inventario() {
 
         {/* Reconciliation History */}
         <Collapsible open={reconOpen} onOpenChange={setReconOpen}>
-          <Card>
+          <Card className="shadow-sm animate-fade-in" style={{ animationDelay: "200ms" }}>
             <CollapsibleTrigger asChild>
               <CardHeader className="cursor-pointer hover:bg-muted/30 transition-colors pb-3">
                 <CardTitle className="text-base flex items-center gap-2">
                   Historial de Reconciliación (7 noches)
-                  <ChevronDown className={`w-4 h-4 ml-auto transition-transform ${reconOpen ? "rotate-180" : ""}`} />
+                  <ChevronDown className={`w-4 h-4 ml-auto transition-transform duration-200 ${reconOpen ? "rotate-180" : ""}`} />
                 </CardTitle>
               </CardHeader>
             </CollapsibleTrigger>
@@ -241,12 +219,12 @@ export default function Inventario() {
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b bg-muted/50">
-                        <th className="text-left p-4 font-semibold text-muted-foreground">Fecha</th>
-                        <th className="text-left p-4 font-semibold text-muted-foreground">Errores</th>
-                        <th className="text-left p-4 font-semibold text-muted-foreground">Warnings</th>
-                        <th className="text-left p-4 font-semibold text-muted-foreground">Total</th>
-                        <th className="text-left p-4 font-semibold text-muted-foreground">Estado</th>
+                      <tr className="border-b">
+                        <th className="table-header">Fecha</th>
+                        <th className="table-header">Errores</th>
+                        <th className="table-header">Advertencias</th>
+                        <th className="table-header">Total</th>
+                        <th className="table-header">Estado</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -254,31 +232,18 @@ export default function Inventario() {
                         <tr key={r.date} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
                           <td className="p-4 font-mono text-xs">{r.date}</td>
                           <td className="p-4">
-                            {r.errors > 0 ? (
-                              <Badge variant="destructive" className="text-xs">{r.errors}</Badge>
-                            ) : (
-                              <span className="text-muted-foreground">0</span>
-                            )}
+                            {r.errors > 0 ? <Badge variant="destructive" className="text-[10px] px-2 py-0.5">{r.errors}</Badge> : <span className="text-muted-foreground">0</span>}
                           </td>
                           <td className="p-4">
-                            {r.warnings > 0 ? (
-                              <Badge className="text-xs bg-warning/15 text-warning border-warning/30" variant="outline">{r.warnings}</Badge>
-                            ) : (
-                              <span className="text-muted-foreground">0</span>
-                            )}
+                            {r.warnings > 0 ? <Badge variant="outline" className="text-[10px] px-2 py-0.5 bg-warning/15 text-warning border-warning/30">{r.warnings}</Badge> : <span className="text-muted-foreground">0</span>}
                           </td>
                           <td className="p-4">{r.total}</td>
                           <td className="p-4">
-                            <Badge
-                              variant="outline"
-                              className={`text-xs ${
-                                r.status === "OK" ? "bg-success/15 text-success border-success/30" :
-                                r.status === "Con errores" ? "bg-destructive/15 text-destructive border-destructive/30" :
-                                "bg-muted text-muted-foreground"
-                              }`}
-                            >
-                              {r.status}
-                            </Badge>
+                            <Badge variant="outline" className={`text-[10px] px-2 py-0.5 ${
+                              r.status === "OK" ? "bg-primary/15 text-primary border-primary/30" :
+                              r.status === "Con errores" ? "bg-destructive/15 text-destructive border-destructive/30" :
+                              "bg-muted text-muted-foreground"
+                            }`}>{r.status}</Badge>
                           </td>
                         </tr>
                       ))}
@@ -291,14 +256,11 @@ export default function Inventario() {
         </Collapsible>
       </div>
 
-      {/* Adjust Stock Modal */}
       <Dialog open={!!adjustModal} onOpenChange={(open) => { if (!open) setAdjustModal(null); }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Ajustar Stock</DialogTitle>
-            <DialogDescription>
-              {adjustModal?.sku} — {adjustModal?.name} (actual: {adjustModal?.stock})
-            </DialogDescription>
+            <DialogDescription>{adjustModal?.sku} — {adjustModal?.name} (actual: {adjustModal?.stock})</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div>
@@ -317,7 +279,7 @@ export default function Inventario() {
                 </SelectContent>
               </Select>
             </div>
-            <Button className="w-full bg-primary hover:bg-primary/90" disabled={!adjustQty || !adjustReason} onClick={handleAdjust}>
+            <Button className="w-full bg-primary hover:bg-primary/90 active:scale-[0.98] transition-all" disabled={!adjustQty || !adjustReason} onClick={handleAdjust}>
               Guardar Ajuste
             </Button>
           </div>
