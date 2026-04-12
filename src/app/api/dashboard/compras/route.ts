@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 
 const N8N_URL = process.env.N8N_WEBHOOK_URL
-const N8N_TOKEN = process.env.N8N_WEBHOOK_TOKEN
+const N8N_TOKEN = process.env.N8N_DASHBOARD_TOKEN
 
 export async function GET() {
   try {

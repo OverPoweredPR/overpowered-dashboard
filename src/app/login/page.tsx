@@ -1,5 +1,7 @@
+"use client";
+
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
@@ -11,7 +13,7 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [state, setState] = useState<LoginState>("idle");
   const [errorMsg, setErrorMsg] = useState("");
-  const navigate = useNavigate();
+  const router = useRouter();
 
   const isValidEmail = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.trim());
 
@@ -27,7 +29,7 @@ export default function Login() {
     await new Promise((r) => setTimeout(r, 1500));
     localStorage.setItem("op_auth", email.trim());
     setState("success");
-    setTimeout(() => navigate("/"), 2000);
+    setTimeout(() => router.push("/"), 2000);
   };
 
   return (
