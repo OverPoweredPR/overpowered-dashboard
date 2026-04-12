@@ -1,19 +1,21 @@
-"use client";
-
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Mail, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
 
 type LoginState = "idle" | "loading" | "success" | "error";
 
+const TENANTS = ["Baguettes de PR", "Borinquen Natural", "Wasabi Signature", "Celebra"];
+
 export default function Login() {
   const [email, setEmail] = useState("");
+  const [tenant, setTenant] = useState(TENANTS[0]);
   const [state, setState] = useState<LoginState>("idle");
   const [errorMsg, setErrorMsg] = useState("");
-  const router = useRouter();
+  const navigate = useNavigate();
 
   const isValidEmail = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.trim());
 
@@ -28,8 +30,9 @@ export default function Login() {
     // Simulated delay — replace with real Supabase magic link call
     await new Promise((r) => setTimeout(r, 1500));
     localStorage.setItem("op_auth", email.trim());
+    localStorage.setItem("op_tenant", tenant);
     setState("success");
-    setTimeout(() => router.push("/"), 2000);
+    setTimeout(() => navigate("/"), 2000);
   };
 
   return (
@@ -89,6 +92,23 @@ export default function Login() {
                   <span className="text-xs">{errorMsg}</span>
                 </div>
               )}
+            </div>
+            <div>
+              <label className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-1.5 block">
+                Seleccionar negocio
+              </label>
+              <Select value={tenant} onValueChange={setTenant} disabled={state === "loading"}>
+                <SelectTrigger className="bg-[#0F1117] border-[#2a2d3a] text-white focus:ring-[#0F6E56] [&>span]:text-white">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-[#161825] border-[#2a2d3a]">
+                  {TENANTS.map((t) => (
+                    <SelectItem key={t} value={t} className="text-white focus:bg-[#0F6E56]/20 focus:text-white">
+                      {t}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <Button
               type="submit"
