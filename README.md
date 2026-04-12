@@ -1,36 +1,216 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Overpowered Dashboard
 
-## Getting Started
+Internal operations dashboard for **Baguettes de PR** (tenant: `baguettes`), built and maintained by OverPowered. Multi-tenant architecture — the same codebase serves multiple food-service clients, each with isolated data via Supabase RLS and JWT-scoped API calls.
 
-First, run the development server:
+The dashboard is a server-side proxy: the browser never talks directly to n8n or Supabase service-role endpoints. All sensitive calls go through Next.js API routes.
+
+---
+
+## Stack
+
+| Layer | Technology |
+|---|---|
+| Framework | Next.js 16.2.3 (App Router) |
+| Language | TypeScript 5, React 19 |
+| Styling | Tailwind CSS v4 |
+| Icons | lucide-react |
+| Charts | recharts |
+| Data fetching | @tanstack/react-query v5 |
+| Auth / DB | Supabase (@supabase/ssr) |
+| Automation backend | n8n (local instance at n8n.overpoweredpr.com) |
+| Tunnel | Cloudflare Tunnel (cloudflared) |
+| Hosting (dev) | Mac Mini — Tailscale IP 100.125.208.33 |
+
+---
+
+## Running in Development
 
 ```bash
+cd ~/Documents/overpowered-dashboard
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+App runs at `http://localhost:3000`. Hot-reload is enabled via Turbopack.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Other scripts:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run build   # production build + type check
+npm run start   # serve the production build
+npm run lint    # ESLint
+```
 
-## Learn More
+> **n8n must be running** for live data. The LaunchAgent (`local.n8n.plist`) keeps it permanent across reboots. If it is down: `launchctl start local.n8n`
 
-To learn more about Next.js, take a look at the following resources:
+---
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Project Structure
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```
+src/
+  app/
+    (dashboard)/          # All protected pages share layout + sidebar
+      layout.tsx          # Sidebar, header, QueryClientProvider
+      home/page.tsx
+      ordenes/page.tsx
+      pagos/page.tsx
+      inventario/page.tsx
+      compras/page.tsx
+      facturas/page.tsx
+      auditoria/page.tsx
+      resoluciones/        # Placeholder
+    api/
+      dashboard/           # Server-side proxy routes (never call n8n from browser)
+        home/route.ts
+        ordenes/route.ts
+        pagos/route.ts
+        auditoria/route.ts
+        auditoria/run/route.ts
+        pago/confirmar/route.ts
+        compra/{ocr,confirmar,recibir}/route.ts
+        facturar/route.ts
+        inventario/ajustar/route.ts
+  hooks/
+    useDashboard.ts        # All React Query hooks
+  lib/
+    api.ts                 # Typed fetcher + all response types + api.* functions
+    types.ts               # Shared types: Tenant, User, MetricCard
+    supabase.ts            # Supabase browser client
+```
 
-## Deploy on Vercel
+---
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Modules
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+| Route | Module | Status | Description |
+|---|---|---|---|
+| `/home` | Home | Live | KPI metrics, WF11 alerts, sync status, last 3 audit findings, quick actions |
+| `/ordenes` | Ordenes | Live | Order table with status filter, mapped from Shopify/Airtable via n8n |
+| `/pagos` | Pagos | Live | Kanban board: pending evidence → under review → confirmed / rejected |
+| `/inventario` | Inventario | Static | Inventory table with stock levels (n8n integration pending) |
+| `/compras` | Compras | Static | Purchase orders + OCR receipt scanning via WF4 |
+| `/facturas` | Facturas | Static | Invoice management via WF12 (email HTML generation) |
+| `/auditoria` | Auditoria | Live | WF11 nightly audit feed, 30-night history, severity filter, PIN-gated manual trigger |
+| `/resoluciones` | Resoluciones | Placeholder | Planned: resolution tracking for audit findings |
+
+**Live** = connected to React Query hooks and n8n API routes.
+**Static** = UI built, not yet wired to live data.
+
+---
+
+## Environment Variables
+
+Create `.env.local` in the project root. Never commit this file.
+
+```bash
+# Supabase
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
+
+# n8n local instance
+N8N_BASE_URL=
+N8N_WEBHOOK_URL=
+N8N_DASHBOARD_TOKEN=
+
+# Workflow webhook URLs (one per workflow the dashboard triggers or reads from)
+WF10_WEBHOOK_URL=
+WF12_WEBHOOK_URL=
+WF4_WEBHOOK_URL=
+WF11_WEBHOOK_URL=        # When set, activates real WF11 trigger; omit for dev mock
+
+# Auth
+DASHBOARD_ADMIN_PIN=     # 4-6 digit PIN for manual audit trigger (plain in dev, replace with Supabase+bcrypt in prod)
+
+# Tenant
+NEXT_PUBLIC_TENANT_SLUG= # e.g. "baguettes"
+```
+
+Variables prefixed `NEXT_PUBLIC_` are exposed to the browser. All others are server-only.
+
+---
+
+## Adding a New Tenant
+
+1. Create a new row in the `tenants` Supabase table (`id`, `name`, `slug`, `active: true`).
+2. Set up Supabase RLS policies so every table filters by `tenant_id = auth.jwt() ->> 'tenant_id'`.
+3. Deploy a separate environment (or Vercel project) with `NEXT_PUBLIC_TENANT_SLUG` set to the new slug.
+4. The sidebar brand name is currently hardcoded in `layout.tsx` — replace it with a lookup from Supabase or the env variable when multi-tenant rendering is wired up.
+5. Each tenant needs its own n8n webhook URLs in the environment. The proxy routes read these from env, so no code changes are required as long as the n8n workflow paths match.
+
+---
+
+## Connecting a New n8n Workflow to the Dashboard
+
+### Pattern A — Dashboard reads data from n8n (query)
+
+1. Add the webhook URL to `.env.local`:
+   ```bash
+   WF99_WEBHOOK_URL=https://n8n.overpoweredpr.com/webhook/wf99-my-workflow
+   ```
+2. Create a Next.js API route at `src/app/api/dashboard/my-feature/route.ts`:
+   ```ts
+   import { NextResponse } from 'next/server'
+
+   export async function GET() {
+     const url = process.env.WF99_WEBHOOK_URL
+     if (!url) return NextResponse.json({ /* mock data for dev */ })
+     const res = await fetch(url)
+     if (!res.ok) return NextResponse.json({ error: `WF99 respondio ${res.status}` }, { status: 502 })
+     return NextResponse.json(await res.json())
+   }
+   ```
+3. Add the response type(s) to `src/lib/api.ts` and an `api.myFeature()` fetcher.
+4. Add `useMyFeature()` to `src/hooks/useDashboard.ts` using `useQuery`.
+5. Use the hook in the page — handle `isPending` with a skeleton, `error` with an error card.
+
+### Pattern B — Dashboard triggers an action in n8n (mutation)
+
+Same steps 1–3, but the route does `POST` to the webhook. Add a `useMutation` hook instead of `useQuery`.
+
+Reference implementation: `useRunAuditoria` in `useDashboard.ts` + `/api/dashboard/auditoria/run/route.ts`.
+
+### Dev mode without a live webhook
+
+Every API route checks whether its env var is set. If missing, it returns deterministic mock data. This lets the full UI run without n8n during development.
+
+---
+
+## Security Architecture
+
+```
+Browser
+  |  HTTPS
+  v
+Next.js API Routes  (/api/dashboard/*)
+  |  - Reads Supabase JWT from HttpOnly cookie (server-side, @supabase/ssr)
+  |  - Injects X-Tenant-ID header — never trusted from browser body
+  |  - n8n URL and API token never sent to browser
+  |  HTTPS
+  v
+n8n  (local, https://n8n.overpoweredpr.com)
+  |  Cloudflare Tunnel — only /webhook/* paths are public (403 for editor)
+  |
+  v
+Airtable / Shopify / Clover / Supabase
+```
+
+**JWT (Supabase Auth):** Session cookie is HttpOnly, managed by `@supabase/ssr`. Middleware (planned) will verify the JWT on every protected route and extract `tenant_id` from claims for RLS enforcement.
+
+**PIN (Audit trigger):** The `/api/dashboard/auditoria/run` route validates a 4-6 digit PIN before forwarding to WF11. Currently compared as plain string against `DASHBOARD_ADMIN_PIN`. TODO: store hashed with bcrypt in Supabase and verify server-side when auth is wired.
+
+**Supabase RLS:** Every Supabase table has row-level security policies filtering by `tenant_id`. The service role key (server-only) bypasses RLS only for admin operations. The anon key (browser-safe) is always RLS-constrained.
+
+**Cloudflare Tunnel:** The n8n editor is never exposed publicly. The tunnel config (`~/.cloudflared/config.yml`) only proxies `/webhook/*`, `/webhook-test/*`, and `/webhook-waiting/*` paths. All other paths return HTTP 403.
+
+**n8n API key:** Stored in `.env.local` as `N8N_DASHBOARD_TOKEN`, injected server-side as the `X-N8N-API-KEY` header. Never reaches the browser.
+
+---
+
+## Infrastructure Notes
+
+- **n8n LaunchAgent:** `~/Library/LaunchAgents/local.n8n.plist` — starts n8n on login. Uses explicit node binary path (`/opt/homebrew/bin/node`) because LaunchAgent cannot resolve shebang scripts.
+- **Cloudflare Tunnel LaunchAgent:** `~/Library/LaunchAgents/com.cloudflare.tunnel.plist` — keeps the tunnel alive permanently.
+- **Tunnel ID:** `67c36712-8f4c-44f4-92d5-22f21aef63a4`
+- **n8n local URL (editor):** `http://localhost:5678` — accessible via Tailscale/LAN only.
+- **n8n public webhooks:** `https://n8n.overpoweredpr.com/webhook/*`
