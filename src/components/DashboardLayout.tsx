@@ -165,7 +165,7 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
                             return (
                               <Link
                                 key={m.url}
-                                to={m.url}
+                                href={m.url}
                                 onClick={() => setMoreOpen(false)}
                                 className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all active:scale-95 ${
                                   active
@@ -188,7 +188,7 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
               return (
                 <Link
                   key={item.url}
-                  to={item.url}
+                  href={item.url}
                   className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-lg transition-all active:scale-95 ${
                     isActive ? "text-primary" : "text-muted-foreground hover:text-foreground"
                   }`}
