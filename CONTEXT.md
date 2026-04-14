@@ -254,3 +254,18 @@ Airtable / Shopify / Clover / Supabase
 - NEXT_PUBLIC_SUPABASE_ANON_KEY — placeholder en local
 - NEXT_PUBLIC_TENANT_SLUG — falta en Development/Preview
 - N8N_WEBHOOK_TOKEN → renombrar a N8N_DASHBOARD_TOKEN
+
+## Dashboard Workflows — n8n Local (2026-04-14)
+
+| Workflow | ID | Webhook |
+|---|---|---|
+| Dashboard - Home | z5zdhv2zJbxfhril | /dashboard-home |
+| Dashboard - Ordenes | Yrqz5srA0Z6JBQ3t | /dashboard-ordenes |
+| Dashboard - Pagos | MM8I9ww7PwmBqJIZ | /dashboard-pagos |
+| Dashboard - Inventario | YMNvjcM73Cn3579k | /dashboard-inventario |
+| Dashboard - Compras | W224KkWcaTcDuuVK | /dashboard-compras |
+| Dashboard - Facturas | WGGYjnOWJVVQFdSa | /dashboard-facturas |
+| Dashboard - Auditoria | tQyKf2haDkdjfR4I | /dashboard-auditoria |
+| Dashboard - Resoluciones | blAeXwnUW3zErAQm | /dashboard-resoluciones |
+
+Todos activos en localhost:5678. Stack completo operativo.
