@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, ReactNode } from "react";
-import { useLocation, Link, useNavigate } from "react-router-dom";
+import { usePathname, useRouter } from "next/navigation";
+import Link from "next/link";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { Badge } from "@/components/ui/badge";
@@ -48,13 +49,13 @@ const moreNavItems = [
 ];
 
 export function DashboardLayout({ children }: { children: ReactNode }) {
-  const location = useLocation();
+  const location = { pathname: usePathname() };
   const [animating, setAnimating] = useState(false);
   const [displayChildren, setDisplayChildren] = useState(children);
   const [notifOpen, setNotifOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const [fabOpen, setFabOpen] = useState(false);
-  const navigate = useNavigate();
+  const router = useRouter();
   const unread = recentAlerts.filter((a) => a.severity === "error" || a.severity === "warning").length;
 
   // Close FAB on ESC
@@ -126,7 +127,7 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
                 </div>
                 <div className="p-2 border-t">
                   <Button variant="ghost" size="sm" className="w-full text-xs hover:bg-muted active:scale-[0.98] transition-all" asChild>
-                    <Link to="/auditoria" onClick={() => setNotifOpen(false)}>Ver todas las alertas</Link>
+                    <Link href="/auditoria" onClick={() => setNotifOpen(false)}>Ver todas las alertas</Link>
                   </Button>
                 </div>
               </PopoverContent>
@@ -210,7 +211,7 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
               {fabOpen && quickActions.map((action, i) => (
                 <button
                   key={action.label}
-                  onClick={() => { setFabOpen(false); navigate(action.url); }}
+                  onClick={() => { setFabOpen(false); router.push(action.url); }}
                   className="flex items-center gap-2 bg-card border rounded-full pl-4 pr-5 py-2.5 shadow-lg animate-fade-in"
                   style={{ animationDelay: `${i * 50}ms`, animationFillMode: "backwards" }}
                 >
