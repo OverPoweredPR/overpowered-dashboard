@@ -362,3 +362,15 @@ Todos activos en localhost:5678. Stack completo operativo.
 3. Tabla dedicada Resoluciones en Airtable
 4. Vendor lookup Compras (linked records)
 5. Datos reales Facturas (WF12 → tabla)
+
+## Análisis Ejecuciones Cloud — 2026-04-14
+
+### Distribución normal (últimas 100)
+- WF1 Shopify→Airtable: 34x — normal
+- WF6 Update Current Stock: 34x — normal  
+- Gerente Ordenes: 32x — activo
+
+### Proyección mensual
+- ~326 ejecuciones en sesión de hoy
+- Ritmo: ~9,780/mes vs límite 10,000
+- Sin anomalías detectadas
