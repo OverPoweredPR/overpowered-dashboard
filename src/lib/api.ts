@@ -171,10 +171,21 @@ export type ProductoInventario = {
   ultima_actualizacion: string
 }
 
+export type DiscrepanciaInventario = {
+  id: string
+  sku: string
+  producto: string
+  stock_shopify: number
+  stock_airtable: number
+  diferencia: number
+  reconocida: boolean
+}
+
 export type InventarioData = {
   generado_en: string
   resumen: { total: number; criticos: number; agotados: number; discrepancias: number }
   productos: ProductoInventario[]
+  discrepancias: DiscrepanciaInventario[]
 }
 
 // ── Compras types ─────────────────────────────────────────────────────────────
