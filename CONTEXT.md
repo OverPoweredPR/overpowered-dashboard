@@ -329,3 +329,15 @@ Todos activos en localhost:5678. Stack completo operativo.
 3. Conectar datos reales a Resoluciones
 4. Vendor lookup en Compras (linked records)
 5. Migración Cloud → Local cuando haya UPS + internet redundante
+
+## Issues Producción Pendientes
+
+### Shipping USPS — OpenAI Rate Limit
+- Error: "too many requests" en nodo OpenAI
+- Solución: implementar retry con backoff 
+  exponencial (1s, 2s, 4s) + reducir 
+  frecuencia de llamadas al workflow
+- Prioridad: Media
+
+### Staff Support — Google Sheets 503
+- Fix aplicado: auto-retry 3x cada 5s ✅
