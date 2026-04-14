@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, ReactNode } from "react";
+import { useTheme } from "@/hooks/use-theme";
 import { useLocation, Link, useNavigate } from "react-router-dom";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
@@ -6,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Drawer, DrawerContent, DrawerTrigger, DrawerClose } from "@/components/ui/drawer";
-import { Bell, Home, Package, CreditCard, BarChart3, AlertTriangle, Info, XCircle, ShoppingCart, FileText, Shield, Scale, MoreHorizontal, PieChart, Settings, Plus, X } from "lucide-react";
+import { Bell, Home, Package, CreditCard, BarChart3, AlertTriangle, Info, XCircle, ShoppingCart, FileText, Shield, Scale, MoreHorizontal, PieChart, Settings, Plus, X, Moon, Sun } from "lucide-react";
 import { GlobalSearch } from "@/components/GlobalSearch";
 import { KeyboardShortcuts } from "@/components/KeyboardShortcuts";
 
@@ -57,6 +58,7 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
   const [moreOpen, setMoreOpen] = useState(false);
   const [fabOpen, setFabOpen] = useState(false);
   const navigate = useNavigate();
+  const { theme, toggleTheme } = useTheme();
   const unread = recentAlerts.filter((a) => a.severity === "error" || a.severity === "warning").length;
 
   // Close FAB on ESC
@@ -98,10 +100,15 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
             </div>
             <GlobalSearch />
 
+            {/* Theme Toggle */}
+            <Button variant="ghost" size="icon" onClick={toggleTheme} className="ml-auto hover:bg-muted active:scale-95 transition-all">
+              {theme === "dark" ? <Sun className="h-4.5 w-4.5" /> : <Moon className="h-4.5 w-4.5" />}
+            </Button>
+
             {/* Notification Bell */}
             <Popover open={notifOpen} onOpenChange={setNotifOpen}>
               <PopoverTrigger asChild>
-                <Button variant="ghost" size="icon" className="ml-auto relative hover:bg-muted active:scale-95 transition-all">
+                <Button variant="ghost" size="icon" className="relative hover:bg-muted active:scale-95 transition-all">
                   <Bell className="h-4.5 w-4.5" />
                   {unread > 0 && (
                     <span className="absolute -top-0.5 -right-0.5 w-4.5 h-4.5 rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold flex items-center justify-center">
