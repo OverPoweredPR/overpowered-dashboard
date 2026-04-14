@@ -418,3 +418,9 @@ clientes, proveedores, empleados, finanzas
 auditoria, resoluciones, reportes, settings
 
 ### Total: 16/16 módulos ✅
+
+## Módulos adicionales — sesión tarde
+- Rutas ✅ /rutas — en producción
+- Calendario ⏳ /calendario — en deploy
+- Métricas ⏳ /metricas — en Lovable
+- Producción ✅ /produccion — en producción
