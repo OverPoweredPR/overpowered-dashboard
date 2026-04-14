@@ -45,18 +45,6 @@ const statusStyle: Record<DocStatus, string> = {
 };
 const statusLabel: Record<DocStatus, string> = { enviada: "Enviada", vista: "Vista", pendiente: "Pendiente", vencida: "Vencida" };
 
-const initialInvoices: Invoice[] = [
-  { id: "INV-450", client: "Hotel San Juan", email: "cuentas@hotelsanjuan.com", type: "factura", amount: 520, date: "2026-04-10", status: "pendiente" },
-  { id: "INV-449", client: "Restaurante El Coquí", email: "pagos@elcoqui.com", type: "factura", amount: 245, date: "2026-04-08", status: "vencida" },
-  { id: "REC-112", client: "Café La Plaza", email: "admin@cafelaplaza.com", type: "recibo", amount: 178.50, date: "2026-04-05", status: "vista" },
-  { id: "INV-447", client: "Deli Boricua", email: "contabilidad@deliboricua.com", type: "factura", amount: 350, date: "2026-04-03", status: "vencida" },
-  { id: "STMT-030", client: "Bistro 787", email: "finance@bistro787.com", type: "estado_cuenta", amount: 1420, date: "2026-04-01", status: "enviada" },
-  { id: "COL-015", client: "Restaurante El Coquí", email: "pagos@elcoqui.com", type: "aviso_cobro", amount: 595, date: "2026-04-11", status: "enviada" },
-  { id: "REC-111", client: "Panadería Express", email: "info@panaderiaexpress.com", type: "recibo", amount: 198, date: "2026-03-28", status: "vista" },
-  { id: "INV-446", client: "Bistro 787", email: "finance@bistro787.com", type: "factura", amount: 420, date: "2026-03-28", status: "enviada" },
-  { id: "COL-014", client: "Deli Boricua", email: "contabilidad@deliboricua.com", type: "aviso_cobro", amount: 350, date: "2026-04-12", status: "pendiente" },
-  { id: "STMT-029", client: "Hotel San Juan", email: "cuentas@hotelsanjuan.com", type: "estado_cuenta", amount: 2340, date: "2026-03-31", status: "vista" },
-];
 
 const tabFilters: { value: string; label: string; type?: DocType }[] = [
   { value: "todas", label: "Todas" },
@@ -67,6 +55,7 @@ const tabFilters: { value: string; label: string; type?: DocType }[] = [
 ];
 
 export default function Facturas() {
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("todas");
   const [search, setSearch] = useState("");
@@ -79,9 +68,28 @@ export default function Facturas() {
   const [resendDoc, setResendDoc] = useState<Invoice | null>(null);
   const [resendEmail, setResendEmail] = useState("");
 
-  useEffect(() => { const t = setTimeout(() => setLoading(false), 500); return () => clearTimeout(t); }, []);
+  useEffect(() => {
+    fetch("/api/dashboard/facturas")
+      .then((r) => r.json())
+      .then((data) => {
+        const raw = data.invoices ?? data.facturas ?? [];
+        // Mapeo de estados n8n → frontend
+        const estadoMap: Record<string, DocStatus> = { pagada: "vista", pagado: "vista" };
+        setInvoices(raw.map((f: Record<string, unknown>) => ({
+          id: (f.id ?? "") as string,
+          client: (f.client ?? f.cliente ?? "") as string,
+          email: (f.email ?? "") as string,
+          type: (f.type ?? "factura") as DocType,
+          amount: (f.amount ?? f.monto ?? 0) as number,
+          date: (f.date ?? f.vence ?? f.fecha_pago ?? "") as string,
+          status: (estadoMap[(f.status ?? f.estado ?? "") as string] ?? f.status ?? f.estado ?? "pendiente") as DocStatus,
+        })));
+      })
+      .catch(() => toast.error("Error cargando facturas"))
+      .finally(() => setLoading(false));
+  }, []);
 
-  const filtered = initialInvoices
+  const filtered = invoices
     .filter((inv) => tab === "todas" || inv.type === tab)
     .filter((inv) => statusFilter === "all" || inv.status === statusFilter)
     .filter((inv) => !search || inv.id.toLowerCase().includes(search.toLowerCase()) || inv.client.toLowerCase().includes(search.toLowerCase()))
@@ -91,10 +99,10 @@ export default function Facturas() {
       return true;
     });
 
-  const totalFacturado = initialInvoices.reduce((s, i) => s + i.amount, 0);
-  const pendienteCobro = initialInvoices.filter((i) => i.status === "pendiente").reduce((s, i) => s + i.amount, 0);
-  const vencidasTotal = initialInvoices.filter((i) => i.status === "vencida").reduce((s, i) => s + i.amount, 0);
-  const enviadasHoy = initialInvoices.filter((i) => i.date === "2026-04-12").length;
+  const totalFacturado = invoices.reduce((s, i) => s + i.amount, 0);
+  const pendienteCobro = invoices.filter((i) => i.status === "pendiente").reduce((s, i) => s + i.amount, 0);
+  const vencidasTotal = invoices.filter((i) => i.status === "vencida").reduce((s, i) => s + i.amount, 0);
+  const enviadasHoy = invoices.filter((i) => i.date === "2026-04-12").length;
 
   const openResend = (inv: Invoice) => {
     setResendDoc(inv);

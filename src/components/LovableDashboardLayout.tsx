@@ -44,7 +44,7 @@ export function AppSidebar() {
               OP
             </div>
             <div>
-              <p className="text-[11px] font-medium text-sidebar-foreground/60 uppercase tracking-wider">OverPowered</p>
+              <p className="text-[11px] font-medium text-sidebar-primary uppercase tracking-wider">OverPowered</p>
               <h2 className="font-bold text-sm text-sidebar-accent-foreground leading-tight">{tenantName}</h2>
               {userEmail && (
                 <p className="text-[10px] text-sidebar-foreground/40 truncate max-w-[140px]">{userEmail}</p>

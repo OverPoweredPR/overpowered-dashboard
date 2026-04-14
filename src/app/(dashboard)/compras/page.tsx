@@ -30,43 +30,6 @@ interface PO {
   status: "borrador" | "enviada" | "recibida" | "cancelada";
 }
 
-const initialPOs: PO[] = [
-  {
-    id: "PO-120", vendor: "Dairy Fresh", total: 890, date: "11 Abr", status: "recibida",
-    items: [
-      { sku: "DF-001", name: "Mantequilla 1lb", qtyOrdered: 50, qtyReceived: 50, price: 4.80 },
-      { sku: "DF-002", name: "Crema Heavy 1qt", qtyOrdered: 30, qtyReceived: 30, price: 6.50 },
-      { sku: "DF-003", name: "Leche Entera 1gal", qtyOrdered: 40, qtyReceived: 38, price: 5.20 },
-    ],
-  },
-  {
-    id: "PO-119", vendor: "Flour Mill PR", total: 1250, date: "10 Abr", status: "enviada",
-    items: [
-      { sku: "FM-010", name: "Harina T-55 25kg", qtyOrdered: 20, qtyReceived: 0, price: 42.00 },
-      { sku: "FM-011", name: "Harina Integral 10kg", qtyOrdered: 10, qtyReceived: 0, price: 28.00 },
-    ],
-  },
-  {
-    id: "PO-118", vendor: "Huevos del Campo", total: 340, date: "9 Abr", status: "enviada",
-    items: [
-      { sku: "HC-005", name: "Huevos Grado A (caja 30)", qtyOrdered: 20, qtyReceived: 0, price: 17.00 },
-    ],
-  },
-  {
-    id: "PO-117", vendor: "Caribbean Sugar Co", total: 560, date: "8 Abr", status: "borrador",
-    items: [
-      { sku: "CS-001", name: "Azúcar Refinada 50lb", qtyOrdered: 15, qtyReceived: 0, price: 24.00 },
-      { sku: "CS-002", name: "Azúcar Morena 25lb", qtyOrdered: 10, qtyReceived: 0, price: 20.00 },
-    ],
-  },
-  {
-    id: "PO-116", vendor: "Dairy Fresh", total: 720, date: "7 Abr", status: "cancelada",
-    items: [
-      { sku: "DF-001", name: "Mantequilla 1lb", qtyOrdered: 60, qtyReceived: 0, price: 4.80 },
-      { sku: "DF-004", name: "Queso Crema 8oz", qtyOrdered: 40, qtyReceived: 0, price: 3.50 },
-    ],
-  },
-];
 
 const vendors = ["Dairy Fresh", "Flour Mill PR", "Huevos del Campo", "Caribbean Sugar Co", "Levadura PR"];
 
@@ -85,7 +48,7 @@ const statusLabel: Record<string, string> = {
 };
 
 export default function Compras() {
-  const [pos, setPOs] = useState(initialPOs);
+  const [pos, setPOs] = useState<PO[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
   const [receiveModal, setReceiveModal] = useState<PO | null>(null);
@@ -99,7 +62,23 @@ export default function Compras() {
   const [ocrProcessing, setOcrProcessing] = useState(false);
   const [ocrResults, setOcrResults] = useState<{ sku: string; name: string; qty: number; price: number }[] | null>(null);
 
-  useEffect(() => { const t = setTimeout(() => setLoading(false), 500); return () => clearTimeout(t); }, []);
+  useEffect(() => {
+    fetch("/api/dashboard/compras")
+      .then((r) => r.json())
+      .then((data) => {
+        const raw = data.purchase_orders ?? data.ordenes ?? [];
+        setPOs(raw.map((p: Record<string, unknown>) => ({
+          id: (p.id ?? "") as string,
+          vendor: (p.vendor ?? p.proveedor ?? "") as string,
+          total: (p.total ?? p.monto ?? 0) as number,
+          date: (p.date ?? p.fecha ?? "") as string,
+          status: (p.status ?? p.estado ?? "borrador") as PO["status"],
+          items: (p.items ?? []) as LineItem[],
+        })));
+      })
+      .catch(() => toast.error("Error cargando compras"))
+      .finally(() => setLoading(false));
+  }, []);
 
   const openCount = pos.filter((p) => p.status === "borrador" || p.status === "enviada").length;
   const pendingRecv = pos.filter((p) => p.status === "enviada").length;

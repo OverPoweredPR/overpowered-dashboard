@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -37,32 +37,6 @@ interface ReconRecord {
   status: "OK" | "Con errores" | "Pendiente";
 }
 
-const products: Product[] = [
-  { sku: "MAT-001", name: "Harina de trigo", stock: 55, min: 50, updatedAt: "2026-04-12 06:30" },
-  { sku: "MAT-002", name: "Mantequilla", stock: 30, min: 25, updatedAt: "2026-04-12 06:30" },
-  { sku: "MAT-003", name: "Levadura", stock: 8, min: 10, updatedAt: "2026-04-11 22:00" },
-  { sku: "MAT-004", name: "Sal", stock: 45, min: 20, updatedAt: "2026-04-12 06:30" },
-  { sku: "MAT-005", name: "Azúcar", stock: 12, min: 15, updatedAt: "2026-04-11 22:00" },
-  { sku: "MAT-006", name: "Huevos", stock: 0, min: 10, updatedAt: "2026-04-12 05:00" },
-  { sku: "MAT-007", name: "Chocolate", stock: 22, min: 15, updatedAt: "2026-04-12 06:30" },
-  { sku: "MAT-008", name: "Crema", stock: 0, min: 20, updatedAt: "2026-04-11 22:00" },
-];
-
-const initialDiscrepancies: Discrepancy[] = [
-  { id: "D-01", sku: "MAT-003", product: "Levadura", shopify: 12, airtable: 8, diff: 4, acknowledged: false },
-  { id: "D-02", sku: "MAT-005", product: "Azúcar", shopify: 15, airtable: 12, diff: 3, acknowledged: false },
-  { id: "D-03", sku: "MAT-007", product: "Chocolate", shopify: 20, airtable: 22, diff: -2, acknowledged: false },
-];
-
-const reconHistory: ReconRecord[] = [
-  { date: "2026-04-12", errors: 0, warnings: 2, total: 8, status: "OK" },
-  { date: "2026-04-11", errors: 1, warnings: 3, total: 8, status: "Con errores" },
-  { date: "2026-04-10", errors: 0, warnings: 1, total: 8, status: "OK" },
-  { date: "2026-04-09", errors: 2, warnings: 4, total: 8, status: "Con errores" },
-  { date: "2026-04-08", errors: 0, warnings: 0, total: 8, status: "OK" },
-  { date: "2026-04-07", errors: 0, warnings: 1, total: 8, status: "OK" },
-  { date: "2026-04-06", errors: 0, warnings: 0, total: 8, status: "Pendiente" },
-];
 
 function getStatus(stock: number, min: number) {
   if (stock === 0) return { dot: "bg-destructive", label: "Sin stock" };
@@ -72,11 +46,47 @@ function getStatus(stock: number, min: number) {
 
 export default function Inventario() {
   const [search, setSearch] = useState("");
-  const [discrepancies, setDiscrepancies] = useState(initialDiscrepancies);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [discrepancies, setDiscrepancies] = useState<Discrepancy[]>([]);
+  const [reconHistory, setReconHistory] = useState<ReconRecord[]>([]);
+  const [loading, setLoading] = useState(true);
   const [adjustModal, setAdjustModal] = useState<Product | null>(null);
   const [adjustQty, setAdjustQty] = useState("");
   const [adjustReason, setAdjustReason] = useState("");
   const [reconOpen, setReconOpen] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/dashboard/inventario")
+      .then((r) => r.json())
+      .then((data) => {
+        // Soporta estructura del webhook n8n (productos/discrepancias)
+        // y estructura directa (products/discrepancies)
+        const rawProducts = data.products ?? data.productos ?? [];
+        const rawDiscrepancies = data.discrepancies ?? data.discrepancias ?? [];
+
+        setProducts(rawProducts.map((p: Record<string, unknown>) => ({
+          sku: (p.sku ?? p.id ?? "-") as string,
+          name: (p.name ?? p.nombre ?? "") as string,
+          stock: (p.stock ?? 0) as number,
+          min: (p.min ?? (p.critico ? (p.stock as number) + 1 : 0)) as number,
+          updatedAt: (p.updatedAt ?? data.generado_en ?? "") as string,
+        })));
+
+        setDiscrepancies(rawDiscrepancies.map((d: Record<string, unknown>, i: number) => ({
+          id: (d.id ?? `D-${String(i + 1).padStart(2, "0")}`) as string,
+          sku: (d.sku ?? "-") as string,
+          product: (d.product ?? d.producto ?? "") as string,
+          shopify: (d.shopify ?? d.sistema ?? 0) as number,
+          airtable: (d.airtable ?? d.fisico ?? 0) as number,
+          diff: (d.diff ?? d.diferencia ?? 0) as number,
+          acknowledged: (d.acknowledged ?? false) as boolean,
+        })));
+
+        setReconHistory(data.reconHistory ?? []);
+      })
+      .catch(() => toast.error("Error cargando inventario"))
+      .finally(() => setLoading(false));
+  }, []);
 
   const zeroStockProducts = products.filter((p) => p.stock === 0);
   const filtered = products.filter(
@@ -96,6 +106,14 @@ export default function Inventario() {
       setAdjustReason("");
     }
   };
+
+  if (loading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-64 text-muted-foreground text-sm">Cargando inventario...</div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>
