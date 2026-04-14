@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -27,8 +27,13 @@ const initialIntegrations: Integration[] = [
 ];
 
 export default function Settings() {
-  const userEmail = typeof window !== "undefined" ? (localStorage.getItem("op_auth") || "usuario@email.com") : "usuario@email.com";
-  const tenantName = typeof window !== "undefined" ? (localStorage.getItem("op_tenant") || "Baguettes de PR") : "Baguettes de PR";
+  const [userEmail, setUserEmail] = useState("usuario@email.com");
+  const [tenantName, setTenantName] = useState("Baguettes de PR");
+
+  useEffect(() => {
+    setUserEmail(localStorage.getItem("op_auth") || "usuario@email.com");
+    setTenantName(localStorage.getItem("op_tenant") || "Baguettes de PR");
+  }, []);
 
   // Perfil
   const [name, setName] = useState("Admin Principal");
