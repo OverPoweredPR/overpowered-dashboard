@@ -56,7 +56,7 @@ function NavLink({
         ${
           active
             ? 'bg-primary text-white'
-            : 'text-slate-300 hover:bg-sidebar-accent hover:text-white'
+            : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-white'
         }
       `}
     >
@@ -68,9 +68,9 @@ function NavLink({
 
 function Sidebar({ onClose }: { onClose?: () => void }) {
   return (
-    <aside className="flex flex-col h-full bg-slate-800 text-white">
+    <aside className="flex flex-col h-full bg-sidebar text-white">
       {/* Logo / Brand */}
-      <div className="flex items-center justify-between px-4 py-5 border-b border-slate-700">
+      <div className="flex items-center justify-between px-4 py-5 border-b border-sidebar-border">
         <div>
           <p className="text-xs font-semibold uppercase tracking-widest text-primary">
             OverPowered
@@ -82,7 +82,7 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
         {onClose && (
           <button
             onClick={onClose}
-            className="lg:hidden text-slate-400 hover:text-white p-1 rounded"
+            className="lg:hidden text-sidebar-foreground/60 hover:text-white p-1 rounded"
             aria-label="Cerrar menú"
           >
             <X size={20} />
@@ -98,10 +98,10 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
       </nav>
 
       {/* Footer */}
-      <div className="px-3 py-4 border-t border-slate-700">
+      <div className="px-3 py-4 border-t border-sidebar-border">
         <button
           className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm
-            text-slate-400 hover:bg-sidebar-accent hover:text-white transition-colors"
+            text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-white transition-colors"
         >
           <LogOut size={18} className="shrink-0" />
           Cerrar sesión
@@ -127,7 +127,7 @@ function Header({ onMenuClick }: { onMenuClick: () => void }) {
 
       {/* Tenant badge (desktop) */}
       <div className="hidden lg:flex items-center gap-2">
-        <span className="text-xs font-semibold uppercase tracking-widest text-slate-400">
+        <span className="text-xs font-semibold uppercase tracking-widest text-sidebar-foreground/60">
           Tenant
         </span>
         <span className="text-sm font-semibold text-slate-700">
@@ -156,7 +156,7 @@ function Header({ onMenuClick }: { onMenuClick: () => void }) {
             <span className="hidden sm:block text-sm font-medium text-slate-700">
               Jose E.
             </span>
-            <ChevronDown size={14} className="text-slate-400" />
+            <ChevronDown size={14} className="text-sidebar-foreground/60" />
           </button>
 
           {userMenuOpen && (
