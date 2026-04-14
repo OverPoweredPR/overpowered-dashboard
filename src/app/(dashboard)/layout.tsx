@@ -21,6 +21,7 @@ import {
 } from 'lucide-react'
 import { GlobalSearch } from '@/components/GlobalSearch'
 import { KeyboardShortcuts } from '@/components/KeyboardShortcuts'
+import { OnboardingTour } from '@/components/OnboardingTour'
 
 const NAV_ITEMS = [
   { href: '/home',        label: 'Home',        icon: LayoutDashboard },
@@ -198,6 +199,7 @@ export default function DashboardLayout({
   return (
     <QueryClientProvider client={queryClient}>
     <KeyboardShortcuts />
+    <OnboardingTour />
     <div className="flex h-screen bg-slate-50 overflow-hidden">
       {/* Desktop sidebar — always visible on lg+ */}
       <div className="hidden lg:flex lg:w-56 xl:w-60 shrink-0">
