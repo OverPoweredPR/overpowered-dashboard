@@ -1,8 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-// TODO: conectar a Airtable / WF5D cuando esté disponible
+const N8N_URL = process.env.N8N_WEBHOOK_URL
+const TOKEN   = process.env.N8N_DASHBOARD_TOKEN
+
+// TODO: conectar a WF5D cuando esté disponible — por ahora retorna stub estático
 export async function GET() {
-  return NextResponse.json({ ok: true, source: 'static' })
+  if (!N8N_URL || !TOKEN) {
+    return NextResponse.json({ ok: true, source: 'static' })
+  }
+  try {
+    const res = await fetch(`${N8N_URL}/dashboard-resoluciones`, {
+      headers: { 'X-Dashboard-Token': TOKEN },
+      next: { revalidate: 0 },
+    })
+    if (!res.ok) {
+      return NextResponse.json({ error: `n8n error: ${res.status}` }, { status: res.status })
+    }
+    return NextResponse.json(await res.json())
+  } catch {
+    return NextResponse.json({ ok: true, source: 'static' })
+  }
 }
 
 export async function POST(req: NextRequest) {
