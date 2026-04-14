@@ -189,7 +189,7 @@ export default function Compras() {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 animate-fade-in">
           <div>
-            <h1 className="text-2xl font-bold">Compras & Recepciones</h1>
+            <h1 className="page-title">Compras & Recepciones</h1>
             <p className="text-sm text-muted-foreground">Órdenes de compra, recepciones y facturas</p>
           </div>
           <Button size="sm" className="gap-2 bg-primary hover:bg-primary/90 active:scale-95 transition-all" onClick={() => setNewModal(true)}>
@@ -216,19 +216,19 @@ export default function Compras() {
         ) : pos.length === 0 ? (
           <EmptyState icon={<ShoppingCart className="w-7 h-7 text-muted-foreground" />} title="Sin órdenes de compra" description="Crea tu primera orden de compra." />
         ) : (
-          <Card className="overflow-hidden animate-fade-in">
+          <Card className="overflow-hidden shadow-sm animate-fade-in">
             <CardContent className="p-0">
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b bg-muted/50">
-                      <th className="text-left p-4 font-semibold text-muted-foreground">PO#</th>
-                      <th className="text-left p-4 font-semibold text-muted-foreground">Proveedor</th>
-                      <th className="text-left p-4 font-semibold text-muted-foreground">Productos</th>
-                      <th className="text-left p-4 font-semibold text-muted-foreground">Monto</th>
-                      <th className="text-left p-4 font-semibold text-muted-foreground hidden sm:table-cell">Fecha</th>
-                      <th className="text-left p-4 font-semibold text-muted-foreground">Estado</th>
-                      <th className="text-left p-4 font-semibold text-muted-foreground">Acciones</th>
+                    <tr className="border-b">
+                      <th className="table-header">PO#</th>
+                      <th className="table-header">Proveedor</th>
+                      <th className="table-header">Productos</th>
+                      <th className="table-header">Monto</th>
+                      <th className="table-header hidden sm:table-cell">Fecha</th>
+                      <th className="table-header">Estado</th>
+                      <th className="table-header">Acciones</th>
                     </tr>
                   </thead>
                   <tbody>
