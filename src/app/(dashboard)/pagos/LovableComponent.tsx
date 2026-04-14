@@ -1,12 +1,13 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { KanbanSkeleton } from "@/components/Skeletons";
-import { Camera, CheckCircle, AlertTriangle, CreditCard } from "lucide-react";
+import { Camera, CheckCircle, AlertTriangle, CreditCard, Search, DollarSign, Clock as ClockIcon, XCircle } from "lucide-react";
 import { toast } from "sonner";
 
 type PaymentMethod = "ATH Móvil" | "Transferencia" | "Efectivo" | "Tarjeta";
@@ -16,6 +17,7 @@ interface PaymentCard {
   id: string;
   client: string;
   amount: string;
+  numAmount: number;
   method: PaymentMethod;
   createdAt: Date;
   column: ColumnKey;
@@ -38,19 +40,33 @@ const columnMeta: { key: ColumnKey; title: string; accent: string }[] = [
 const now = new Date();
 const hoursAgo = (h: number) => new Date(now.getTime() - h * 60 * 60 * 1000);
 
+function elapsedLabel(date: Date): string {
+  const diff = now.getTime() - date.getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 60) return `hace ${mins}min`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `hace ${hrs}h`;
+  const days = Math.floor(hrs / 24);
+  return `hace ${days}d`;
+}
+
 const initialCards: PaymentCard[] = [
-  { id: "ORD-401", client: "Hotel San Juan", amount: "$520.00", method: "ATH Móvil", createdAt: hoursAgo(2), column: "pendiente" },
-  { id: "ORD-398", client: "Café La Plaza", amount: "$178.50", method: "Transferencia", createdAt: hoursAgo(30), column: "pendiente" },
-  { id: "ORD-395", client: "Restaurante El Coquí", amount: "$245.00", method: "Efectivo", createdAt: hoursAgo(48), column: "pendiente" },
-  { id: "ORD-390", client: "Deli Boricua", amount: "$350.00", method: "ATH Móvil", createdAt: hoursAgo(5), column: "evidencia" },
-  { id: "ORD-388", client: "Bistro 787", amount: "$420.00", method: "Tarjeta", createdAt: hoursAgo(28), column: "evidencia" },
-  { id: "ORD-380", client: "Panadería Express", amount: "$198.00", method: "Transferencia", createdAt: hoursAgo(72), column: "confirmado" },
-  { id: "ORD-375", client: "Hotel Caribe", amount: "$610.00", method: "ATH Móvil", createdAt: hoursAgo(96), column: "confirmado" },
-  { id: "ORD-370", client: "Bar La Esquina", amount: "$89.00", method: "Efectivo", createdAt: hoursAgo(50), column: "rechazado" },
+  { id: "ORD-401", client: "Hotel San Juan", amount: "$520.00", numAmount: 520, method: "ATH Móvil", createdAt: hoursAgo(2), column: "pendiente" },
+  { id: "ORD-398", client: "Café La Plaza", amount: "$178.50", numAmount: 178.5, method: "Transferencia", createdAt: hoursAgo(30), column: "pendiente" },
+  { id: "ORD-395", client: "Restaurante El Coquí", amount: "$245.00", numAmount: 245, method: "Efectivo", createdAt: hoursAgo(48), column: "pendiente" },
+  { id: "ORD-390", client: "Deli Boricua", amount: "$350.00", numAmount: 350, method: "ATH Móvil", createdAt: hoursAgo(5), column: "evidencia" },
+  { id: "ORD-388", client: "Bistro 787", amount: "$420.00", numAmount: 420, method: "Tarjeta", createdAt: hoursAgo(28), column: "evidencia" },
+  { id: "ORD-380", client: "Panadería Express", amount: "$198.00", numAmount: 198, method: "Transferencia", createdAt: hoursAgo(72), column: "confirmado" },
+  { id: "ORD-375", client: "Hotel Caribe", amount: "$610.00", numAmount: 610, method: "ATH Móvil", createdAt: hoursAgo(96), column: "confirmado" },
+  { id: "ORD-370", client: "Bar La Esquina", amount: "$89.00", numAmount: 89, method: "Efectivo", createdAt: hoursAgo(50), column: "rechazado" },
 ];
 
 function isOverdue(date: Date) {
   return now.getTime() - date.getTime() > 24 * 60 * 60 * 1000;
+}
+
+function sumByColumn(cards: PaymentCard[], col: ColumnKey) {
+  return cards.filter((c) => c.column === col).reduce((s, c) => s + c.numAmount, 0);
 }
 
 export default function Pagos() {
@@ -58,7 +74,20 @@ export default function Pagos() {
   const [pinModalCard, setPinModalCard] = useState<PaymentCard | null>(null);
   const [pin, setPin] = useState("");
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
   useEffect(() => { const t = setTimeout(() => setLoading(false), 500); return () => clearTimeout(t); }, []);
+
+  const filteredCards = useMemo(() => {
+    if (!search.trim()) return cards;
+    const q = search.toLowerCase();
+    return cards.filter((c) => c.id.toLowerCase().includes(q) || c.client.toLowerCase().includes(q));
+  }, [cards, search]);
+
+  const totals = useMemo(() => ({
+    pendiente: sumByColumn(cards, "pendiente") + sumByColumn(cards, "evidencia"),
+    confirmado: sumByColumn(cards, "confirmado"),
+    rechazado: sumByColumn(cards, "rechazado"),
+  }), [cards]);
 
   const moveCard = (id: string, to: ColumnKey) => {
     setCards((prev) => prev.map((c) => (c.id === id ? { ...c, column: to } : c)));
@@ -68,7 +97,7 @@ export default function Pagos() {
     const input = document.createElement("input");
     input.type = "file";
     input.accept = "image/*";
-    input.capture = "environment";
+    input.setAttribute("capture", "environment");
     input.onchange = () => {
       moveCard(card.id, "evidencia");
       toast.success(`Evidencia subida para ${card.id}`);
@@ -85,12 +114,62 @@ export default function Pagos() {
     }
   };
 
+  const fmt = (n: number) => `$${n.toLocaleString("en-US", { minimumFractionDigits: 2 })}`;
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
         <div className="animate-fade-in">
           <h1 className="page-title">Pagos</h1>
           <p className="text-sm text-muted-foreground">Tablero de cobranza y seguimiento de pagos</p>
+        </div>
+
+        {/* Summary bar */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 animate-fade-in">
+          <Card className="shadow-sm border-warning/30">
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-warning/10 flex items-center justify-center">
+                <ClockIcon className="h-4.5 w-4.5 text-warning" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Total Pendiente</p>
+                <p className="text-lg font-bold text-warning">{fmt(totals.pendiente)}</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="shadow-sm border-primary/30">
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center">
+                <DollarSign className="h-4.5 w-4.5 text-primary" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Confirmado Hoy</p>
+                <p className="text-lg font-bold text-primary">{fmt(totals.confirmado)}</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="shadow-sm border-destructive/30">
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-destructive/10 flex items-center justify-center">
+                <XCircle className="h-4.5 w-4.5 text-destructive" />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Total Rechazado</p>
+                <p className="text-lg font-bold text-destructive">{fmt(totals.rechazado)}</p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Search bar */}
+        <div className="relative animate-fade-in max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Buscar por orden o cliente..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9"
+          />
         </div>
 
         {loading ? (
@@ -101,7 +180,7 @@ export default function Pagos() {
           <div className="overflow-x-auto -mx-4 px-4 pb-4 md:mx-0 md:px-0">
             <div className="flex gap-4 min-w-[900px] xl:grid xl:grid-cols-4 xl:min-w-0">
               {columnMeta.map((col) => {
-                const colCards = cards.filter((c) => c.column === col.key);
+                const colCards = filteredCards.filter((c) => c.column === col.key);
                 return (
                   <div key={col.key} className="flex-1 min-w-[220px] space-y-3 animate-fade-in">
                     <div className="flex items-center gap-2 sticky top-0 bg-background py-1 z-10">
@@ -126,11 +205,13 @@ export default function Pagos() {
                               <CardContent className="p-4 space-y-3">
                                 <div className="flex items-start justify-between gap-2">
                                   <span className="text-xs font-mono text-muted-foreground">{card.id}</span>
-                                  {overdue && (
-                                    <Badge variant="destructive" className="text-[10px] px-1.5 py-0 shrink-0 gap-1">
-                                      <AlertTriangle className="w-3 h-3" /> +24h
-                                    </Badge>
-                                  )}
+                                  <div className="flex items-center gap-1.5 shrink-0">
+                                    {overdue && (
+                                      <Badge variant="destructive" className="text-[10px] px-1.5 py-0 gap-1">
+                                        <AlertTriangle className="w-3 h-3" /> +24h
+                                      </Badge>
+                                    )}
+                                  </div>
                                 </div>
                                 <p className="font-medium text-sm leading-tight">{card.client}</p>
                                 <div className="flex items-center justify-between">
@@ -139,6 +220,9 @@ export default function Pagos() {
                                     {card.method}
                                   </Badge>
                                 </div>
+                                <p className="text-[10px] text-muted-foreground/70 flex items-center gap-1">
+                                  <ClockIcon className="w-3 h-3" /> {elapsedLabel(card.createdAt)}
+                                </p>
 
                                 {col.key === "pendiente" && (
                                   <Button size="sm" className="w-full gap-2 bg-primary hover:bg-primary/90 active:scale-[0.97] transition-all" onClick={() => handleUploadEvidence(card)}>
