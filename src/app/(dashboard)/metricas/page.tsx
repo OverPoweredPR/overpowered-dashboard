@@ -138,7 +138,7 @@ export default function Metricas() {
                     <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
                     <XAxis dataKey="date" tick={{ fontSize: 11 }} interval={4} className="text-muted-foreground" />
                     <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} className="text-muted-foreground" />
-                    <Tooltip formatter={(v: unknown) => fmt(Number(v ?? 0))} contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 13 }} />
+                    <Tooltip formatter={(v) => fmt(Number(v))} contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 13 }} />
                     <Area type="monotone" dataKey="revenue" stroke="hsl(165 76% 25%)" strokeWidth={2} fill="url(#revGrad)" />
                   </AreaChart>
                 </ResponsiveContainer>
@@ -158,7 +158,7 @@ export default function Metricas() {
                     <Pie data={ordersByStatus} cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={3} dataKey="value">
                       {ordersByStatus.map((e, i) => <Cell key={i} fill={e.color} />)}
                     </Pie>
-                    <Tooltip formatter={(v: unknown) => v as number} contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 13 }} />
+                    <Tooltip formatter={(v) => Number(v)} contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 13 }} />
                   </PieChart>
                 </ResponsiveContainer>
               </div>
