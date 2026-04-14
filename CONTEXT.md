@@ -293,3 +293,22 @@ Todos activos en localhost:5678. Stack completo operativo.
   de llamar WF6 — agrupa productos por evento
 - Prioridad: Alta — proyección 19,600 exec/mes
   vs límite 10,000
+
+## Migración a Cloud completada — 2026-04-14
+
+### Dashboard workflows en Cloud
+- Dashboard Home: 5DOrdusRKHDS026A ✅
+- Dashboard Ordenes: mgUg0hmeEyq7uskb ✅
+- Dashboard Pagos: lWIQog6PFS2YTZkf ✅
+- Dashboard Inventario: RpJfDl1Xo5JumecG ✅
+  - Conectado a Airtable Current Stock
+  - 259 productos reales, Product Title fix aplicado
+
+### Vercel
+- N8N_WEBHOOK_URL → https://mrestevez.app.n8n.cloud/webhook
+- Dashboard independiente del Mac Mini ✅
+- Build limpio 28 páginas, 0 errores TS
+
+### Local — solo desarrollo
+- 8 workflows dashboard desactivados
+- Mac Mini no requerido para producción
