@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { StatCardsSkeleton } from "@/components/Skeletons";
 import { usePullRefresh } from "@/hooks/use-pull-refresh";
-import { Package, DollarSign, Clock, AlertTriangle, Plus, RefreshCw, FileText, ShoppingCart, Upload, CheckCheck, ClipboardCheck } from "lucide-react";
+import { Package, DollarSign, Clock, AlertTriangle, Plus, RefreshCw, FileText, ShoppingCart, Upload, CheckCheck, ClipboardCheck, CalendarClock } from "lucide-react";
 import { toast } from "sonner";
 
 const sparklineData: Record<string, number[]> = {
@@ -210,6 +210,42 @@ export default function Index() {
               </CardContent>
             </Card>
           </div>
+        </div>
+
+        {/* Today's Schedule */}
+        <div className="animate-fade-in" style={{ animationDelay: "400ms" }}>
+          <Card className="shadow-sm">
+            <CardHeader className="pb-3 flex-row items-center justify-between space-y-0">
+              <CardTitle className="section-label flex items-center gap-2">
+                <CalendarClock className="h-4 w-4 text-primary" /> Agenda de Hoy
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {[
+                  { time: "7:00 AM", order: "ORD-2087", client: "Café La Plaza", items: "48 baguettes, 12 croissants", status: "En preparación" },
+                  { time: "8:30 AM", order: "ORD-2088", client: "Hotel Condado", items: "120 panecillos, 24 baguettes", status: "Pendiente" },
+                  { time: "10:00 AM", order: "ORD-2089", client: "Restaurante El Coquí", items: "36 baguettes, 6 tortas", status: "Pendiente" },
+                  { time: "12:00 PM", order: "ORD-2090", client: "Panadería Don Juan", items: "60 baguettes", status: "Pendiente" },
+                  { time: "3:00 PM", order: "ORD-2091", client: "Deli Express", items: "24 baguettes, 12 empanadas", status: "Pendiente" },
+                ].map((slot, i) => (
+                  <div key={i} className="flex items-center gap-4 p-3 rounded-lg border hover:bg-muted/30 transition-colors">
+                    <div className="text-xs font-mono font-semibold text-primary w-16 shrink-0">{slot.time}</div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold">{slot.order}</span>
+                        <span className="text-xs text-muted-foreground">— {slot.client}</span>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground truncate">{slot.items}</p>
+                    </div>
+                    <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full shrink-0 ${
+                      slot.status === "En preparación" ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
+                    }`}>{slot.status}</span>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </div>
     </DashboardLayout>

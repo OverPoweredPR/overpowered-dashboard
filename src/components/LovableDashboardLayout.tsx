@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Drawer, DrawerContent, DrawerTrigger, DrawerClose } from "@/components/ui/drawer";
 import { Bell, Home, Package, CreditCard, BarChart3, AlertTriangle, Info, XCircle, ShoppingCart, FileText, Shield, Scale, MoreHorizontal, PieChart, Settings, Plus, X } from "lucide-react";
+import { GlobalSearch } from "@/components/GlobalSearch";
+import { KeyboardShortcuts } from "@/components/KeyboardShortcuts";
 
 const quickActions = [
   { label: "Nueva Orden", emoji: "📦", url: "/ordenes" },
@@ -83,16 +85,18 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
 
   return (
     <SidebarProvider>
+      <KeyboardShortcuts />
       <div className="min-h-screen flex w-full">
         <AppSidebar />
         <div className="flex-1 flex flex-col min-w-0">
           {/* Header */}
           <header className="h-14 flex items-center border-b bg-card px-4 sticky top-0 z-20">
             <SidebarTrigger className="mr-4" />
-            <div className="flex items-center gap-2">
+            <div className="hidden sm:flex items-center gap-2 mr-3">
               <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-              <span className="text-xs text-muted-foreground font-medium hidden sm:inline">Clover POS sincronizado</span>
+              <span className="text-xs text-muted-foreground font-medium">Clover POS sincronizado</span>
             </div>
+            <GlobalSearch />
 
             {/* Notification Bell */}
             <Popover open={notifOpen} onOpenChange={setNotifOpen}>
