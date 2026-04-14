@@ -56,29 +56,40 @@
 
 @layer base {
   * {
-    @apply border-border;
+    border-color: hsl(var(--border));
   }
   body {
-    @apply bg-background text-foreground font-sans antialiased;
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
     font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 }
 
 /* Consistent page title */
 .page-title {
-  @apply text-xl font-bold text-foreground;
   font-size: 20px;
+  font-weight: 700;
+  color: hsl(var(--foreground));
 }
 
 /* Section label style */
 .section-label {
-  @apply text-muted-foreground font-semibold uppercase tracking-wider;
+  color: hsl(var(--muted-foreground));
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
   font-size: 11px;
 }
 
 /* Consistent table header */
 .table-header {
-  @apply text-left p-4 font-semibold uppercase tracking-wider;
+  text-align: left;
+  padding: 1rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
   font-size: 11px;
   color: hsl(var(--muted-foreground));
   background: hsl(var(--muted) / 0.5);
