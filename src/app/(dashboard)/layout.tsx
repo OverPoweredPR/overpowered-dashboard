@@ -19,6 +19,8 @@ import {
   Bell,
   LogOut,
 } from 'lucide-react'
+import { GlobalSearch } from '@/components/GlobalSearch'
+import { KeyboardShortcuts } from '@/components/KeyboardShortcuts'
 
 const NAV_ITEMS = [
   { href: '/home',        label: 'Home',        icon: LayoutDashboard },
@@ -131,6 +133,11 @@ function Header({ onMenuClick }: { onMenuClick: () => void }) {
         </span>
       </div>
 
+      {/* Global search */}
+      <div className="hidden sm:flex flex-1 max-w-sm mx-4">
+        <GlobalSearch />
+      </div>
+
       {/* Right — notifications + user */}
       <div className="flex items-center gap-2 ml-auto">
         {/* Notification bell */}
@@ -190,6 +197,7 @@ export default function DashboardLayout({
 
   return (
     <QueryClientProvider client={queryClient}>
+    <KeyboardShortcuts />
     <div className="flex h-screen bg-slate-50 overflow-hidden">
       {/* Desktop sidebar — always visible on lg+ */}
       <div className="hidden lg:flex lg:w-56 xl:w-60 shrink-0">
