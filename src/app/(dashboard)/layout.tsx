@@ -16,12 +16,13 @@ import {
   Menu,
   X,
   ChevronDown,
-  Bell,
+
   LogOut,
 } from 'lucide-react'
 import { GlobalSearch } from '@/components/GlobalSearch'
 import { KeyboardShortcuts } from '@/components/KeyboardShortcuts'
 import { OnboardingTour } from '@/components/OnboardingTour'
+import { NotificationCenter } from '@/components/NotificationCenter'
 
 const NAV_ITEMS = [
   { href: '/home',        label: 'Home',        icon: LayoutDashboard },
@@ -141,11 +142,7 @@ function Header({ onMenuClick }: { onMenuClick: () => void }) {
 
       {/* Right — notifications + user */}
       <div className="flex items-center gap-2 ml-auto">
-        {/* Notification bell */}
-        <button className="relative p-2 rounded-md text-slate-500 hover:bg-slate-100">
-          <Bell size={18} />
-          <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-red-500" />
-        </button>
+        <NotificationCenter />
 
         {/* User menu */}
         <div className="relative">
