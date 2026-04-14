@@ -269,3 +269,19 @@ Airtable / Shopify / Clover / Supabase
 | Dashboard - Resoluciones | blAeXwnUW3zErAQm | /dashboard-resoluciones |
 
 Todos activos en localhost:5678. Stack completo operativo.
+
+## Estado Workflows n8n Local — 2026-04-14
+
+### Activos (8) — solo Dashboard
+- Dashboard Home, Ordenes, Pagos, Inventario, 
+  Compras, Facturas, Auditoria, Resoluciones
+
+### Inactivos en Local (pendiente migración)
+- WF3, WF11 — corren en Cloud, NO activar 
+  en local hasta desactivar en Cloud primero
+
+### Regla de migración Cloud → Local
+1. Desactivar en Cloud primero
+2. Verificar en local
+3. Activar en local
+4. Nunca los dos activos simultáneamente
