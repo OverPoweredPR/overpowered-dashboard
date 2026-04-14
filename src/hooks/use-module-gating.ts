@@ -52,8 +52,8 @@ function loadEnabled(): string[] {
 }
 
 function loadPlan(): PlanTier {
-  if (typeof window === "undefined") return "basico";
-  return (localStorage.getItem(PLAN_KEY) as PlanTier) || "basico";
+  if (typeof window === "undefined") return "pro";
+  return (localStorage.getItem(PLAN_KEY) as PlanTier) || "pro";
 }
 
 export function useModuleGating() {
