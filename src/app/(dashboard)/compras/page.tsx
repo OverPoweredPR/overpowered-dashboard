@@ -1,5 +1,5 @@
-"use client";
-import { useState, useEffect, useCallback, useMemo } from "react";
+"use client"
+import { useState, useEffect, useCallback } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -10,13 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { TableSkeleton } from "@/components/Skeletons";
 import { EmptyState } from "@/components/EmptyState";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Upload, ShoppingCart, Plus, Eye, PackageCheck,
-  Trash2, ChevronDown, Sparkles, DollarSign, History,
-} from "lucide-react";
+import { Upload, FileText, ShoppingCart, Plus, Eye, PackageCheck, Trash2, ChevronDown, Sparkles } from "lucide-react";
 import { toast } from "sonner";
-
-// ── Types ─────────────────────────────────────────────────────────────────────
 
 interface LineItem {
   sku: string;
@@ -35,141 +30,80 @@ interface PO {
   status: "borrador" | "enviada" | "recibida" | "cancelada";
 }
 
-interface OcrItem {
-  sku: string;
-  name: string;
-  qty: number;
-  price: number;
-}
+const initialPOs: PO[] = [
+  {
+    id: "PO-120", vendor: "Dairy Fresh", total: 890, date: "11 Abr", status: "recibida",
+    items: [
+      { sku: "DF-001", name: "Mantequilla 1lb", qtyOrdered: 50, qtyReceived: 50, price: 4.80 },
+      { sku: "DF-002", name: "Crema Heavy 1qt", qtyOrdered: 30, qtyReceived: 30, price: 6.50 },
+      { sku: "DF-003", name: "Leche Entera 1gal", qtyOrdered: 40, qtyReceived: 38, price: 5.20 },
+    ],
+  },
+  {
+    id: "PO-119", vendor: "Flour Mill PR", total: 1250, date: "10 Abr", status: "enviada",
+    items: [
+      { sku: "FM-010", name: "Harina T-55 25kg", qtyOrdered: 20, qtyReceived: 0, price: 42.00 },
+      { sku: "FM-011", name: "Harina Integral 10kg", qtyOrdered: 10, qtyReceived: 0, price: 28.00 },
+    ],
+  },
+  {
+    id: "PO-118", vendor: "Huevos del Campo", total: 340, date: "9 Abr", status: "enviada",
+    items: [
+      { sku: "HC-005", name: "Huevos Grado A (caja 30)", qtyOrdered: 20, qtyReceived: 0, price: 17.00 },
+    ],
+  },
+  {
+    id: "PO-117", vendor: "Caribbean Sugar Co", total: 560, date: "8 Abr", status: "borrador",
+    items: [
+      { sku: "CS-001", name: "Azúcar Refinada 50lb", qtyOrdered: 15, qtyReceived: 0, price: 24.00 },
+      { sku: "CS-002", name: "Azúcar Morena 25lb", qtyOrdered: 10, qtyReceived: 0, price: 20.00 },
+    ],
+  },
+  {
+    id: "PO-116", vendor: "Dairy Fresh", total: 720, date: "7 Abr", status: "cancelada",
+    items: [
+      { sku: "DF-001", name: "Mantequilla 1lb", qtyOrdered: 60, qtyReceived: 0, price: 4.80 },
+      { sku: "DF-004", name: "Queso Crema 8oz", qtyOrdered: 40, qtyReceived: 0, price: 3.50 },
+    ],
+  },
+];
 
-// ── Constants ─────────────────────────────────────────────────────────────────
+const vendors = ["Dairy Fresh", "Flour Mill PR", "Huevos del Campo", "Caribbean Sugar Co", "Levadura PR"];
 
-const STATUS_STYLE: Record<string, string> = {
-  borrador:  "bg-muted text-muted-foreground border-border",
-  enviada:   "bg-blue-50 text-blue-600 border-blue-200",
-  recibida:  "bg-emerald-50 text-emerald-700 border-emerald-200",
-  cancelada: "bg-red-50 text-destructive border-red-200",
+const statusStyle: Record<string, string> = {
+  borrador: "bg-muted text-muted-foreground border-border",
+  enviada: "bg-info/10 text-info border-info/30",
+  recibida: "bg-success/10 text-success border-success/30",
+  cancelada: "bg-destructive/10 text-destructive border-destructive/30",
 };
 
-const STATUS_LABEL: Record<string, string> = {
-  borrador:  "Borrador",
-  enviada:   "Enviada",
-  recibida:  "Recibida",
+const statusLabel: Record<string, string> = {
+  borrador: "Borrador",
+  enviada: "Enviada",
+  recibida: "Recibida",
   cancelada: "Cancelada",
 };
 
-const DEFAULT_VENDORS = ["Dairy Fresh", "Flour Mill PR", "Huevos del Campo", "Caribbean Sugar Co", "Levadura PR"];
-
-// ── Mini trend chart (inline SVG, no dep) ─────────────────────────────────────
-
-function HistorialChart({ pos }: { pos: PO[] }) {
-  const recibidas = pos.filter((p) => p.status === "recibida");
-  // Group by date, count totals
-  const byDate: Record<string, { total: number; count: number }> = {};
-  recibidas.forEach((p) => {
-    const key = p.date;
-    if (!byDate[key]) byDate[key] = { total: 0, count: 0 };
-    byDate[key].total += p.total;
-    byDate[key].count += 1;
-  });
-  const days = Object.keys(byDate).slice(-7);
-  if (days.length < 2) return null;
-  const values = days.map((d) => byDate[d].total);
-  const max = Math.max(...values, 1);
-  const W = 220, H = 48, pad = 6;
-  const pts = values.map((v, i) => {
-    const x = pad + (i / (values.length - 1)) * (W - pad * 2);
-    const y = H - pad - (v / max) * (H - pad * 2);
-    return `${x},${y}`;
-  });
-  return (
-    <svg width={W} height={H} className="mt-2">
-      <polyline points={pts.join(" ")} fill="none" stroke="#0F6E56" strokeWidth={2} strokeLinejoin="round" />
-      {pts.map((pt, i) => {
-        const [x, y] = pt.split(",").map(Number);
-        return <circle key={i} cx={x} cy={y} r={3} fill="#0F6E56" />;
-      })}
-    </svg>
-  );
-}
-
-// ── Progress bar ──────────────────────────────────────────────────────────────
-
-function ReceiptProgress({ items }: { items: LineItem[] }) {
-  const ordered = items.reduce((s, i) => s + i.qtyOrdered, 0);
-  const received = items.reduce((s, i) => s + i.qtyReceived, 0);
-  if (ordered === 0) return <Badge variant="outline" className="text-xs">{items.length} prod.</Badge>;
-  const pct = Math.round((received / ordered) * 100);
-  return (
-    <div className="flex flex-col gap-1 min-w-[80px]">
-      <div className="flex justify-between text-[10px] text-muted-foreground">
-        <span>{items.length} prod.</span>
-        <span>{pct}%</span>
-      </div>
-      <div className="h-1.5 rounded-full bg-muted overflow-hidden w-full">
-        <div
-          className="h-full rounded-full transition-all"
-          style={{ width: `${pct}%`, backgroundColor: pct === 100 ? "#0F6E56" : "#f59e0b" }}
-        />
-      </div>
-    </div>
-  );
-}
-
-// ── Main page ─────────────────────────────────────────────────────────────────
-
 export default function Compras() {
-  const [pos, setPOs] = useState<PO[]>([]);
+  const [pos, setPOs] = useState(initialPOs);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"activas" | "historial">("activas");
   const [expandedRow, setExpandedRow] = useState<string | null>(null);
   const [receiveModal, setReceiveModal] = useState<PO | null>(null);
   const [receiveQtys, setReceiveQtys] = useState<number[]>([]);
   const [newModal, setNewModal] = useState(false);
   const [newVendor, setNewVendor] = useState("");
-  const [newItems, setNewItems] = useState<{ sku: string; name: string; qty: number; price: number }[]>([
-    { sku: "", name: "", qty: 1, price: 0 },
-  ]);
+  const [newItems, setNewItems] = useState<{ sku: string; name: string; qty: number; price: number }[]>([{ sku: "", name: "", qty: 1, price: 0 }]);
 
-  // OCR state — now editable
+  // OCR state
   const [ocrDragging, setOcrDragging] = useState(false);
   const [ocrProcessing, setOcrProcessing] = useState(false);
-  const [ocrItems, setOcrItems] = useState<OcrItem[] | null>(null);
+  const [ocrResults, setOcrResults] = useState<{ sku: string; name: string; qty: number; price: number }[] | null>(null);
 
-  useEffect(() => {
-    fetch("/api/dashboard/compras")
-      .then((r) => r.json())
-      .then((data) => {
-        const raw = data.purchase_orders ?? data.ordenes ?? [];
-        setPOs(
-          raw.map((p: Record<string, unknown>) => ({
-            id:     (p.id ?? "") as string,
-            vendor: (p.vendor ?? p.proveedor ?? "") as string,
-            total:  (p.total ?? p.monto ?? 0) as number,
-            date:   (p.date ?? p.fecha ?? "") as string,
-            status: (p.status ?? p.estado ?? "borrador") as PO["status"],
-            items:  (p.items ?? []) as LineItem[],
-          }))
-        );
-      })
-      .catch(() => toast.error("Error cargando compras"))
-      .finally(() => setLoading(false));
-  }, []);
+  useEffect(() => { const t = setTimeout(() => setLoading(false), 500); return () => clearTimeout(t); }, []);
 
-  // Derived vendors — real vendors from existing POs + defaults
-  const vendorList = useMemo(() => {
-    const fromPOs = pos.map((p) => p.vendor).filter(Boolean);
-    return Array.from(new Set([...fromPOs, ...DEFAULT_VENDORS])).sort();
-  }, [pos]);
-
-  // Summary stats
-  const totalPOs   = pos.length;
-  const monthSpend = pos.filter((p) => p.status === "recibida").reduce((s, p) => s + p.total, 0);
+  const openCount = pos.filter((p) => p.status === "borrador" || p.status === "enviada").length;
   const pendingRecv = pos.filter((p) => p.status === "enviada").length;
-
-  // Historial — completed POs
-  const historial = pos.filter((p) => p.status === "recibida");
-  const historialTotal = historial.reduce((s, p) => s + p.total, 0);
+  const monthSpend = pos.filter((p) => p.status === "recibida").reduce((s, p) => s + p.total, 0);
 
   // Receive modal
   const openReceive = (po: PO) => {
@@ -179,26 +113,24 @@ export default function Compras() {
 
   const confirmReceive = () => {
     if (!receiveModal) return;
-    setPOs((prev) =>
-      prev.map((p) =>
-        p.id !== receiveModal.id
-          ? p
-          : {
-              ...p,
-              status: "recibida" as const,
-              items: p.items.map((item, i) => ({ ...item, qtyReceived: receiveQtys[i] })),
-            }
-      )
-    );
+    setPOs((prev) => prev.map((p) => {
+      if (p.id !== receiveModal.id) return p;
+      return {
+        ...p,
+        status: "recibida" as const,
+        items: p.items.map((item, i) => ({ ...item, qtyReceived: receiveQtys[i] })),
+      };
+    }));
     setReceiveModal(null);
     toast.success(`${receiveModal.id} marcada como recibida`);
   };
 
   // New PO
-  const addNewItem    = () => setNewItems((prev) => [...prev, { sku: "", name: "", qty: 1, price: 0 }]);
+  const addNewItem = () => setNewItems((prev) => [...prev, { sku: "", name: "", qty: 1, price: 0 }]);
   const removeNewItem = (idx: number) => setNewItems((prev) => prev.filter((_, i) => i !== idx));
-  const updateNewItem = (idx: number, field: string, value: string | number) =>
-    setNewItems((prev) => prev.map((item, i) => (i === idx ? { ...item, [field]: value } : item)));
+  const updateNewItem = (idx: number, field: string, value: string | number) => {
+    setNewItems((prev) => prev.map((item, i) => i === idx ? { ...item, [field]: value } : item));
+  };
   const newTotal = newItems.reduce((s, i) => s + i.qty * i.price, 0);
 
   const createPO = () => {
@@ -207,11 +139,11 @@ export default function Compras() {
       return;
     }
     const po: PO = {
-      id:     `PO-${121 + pos.length}`,
+      id: `PO-${121 + pos.length}`,
       vendor: newVendor,
-      items:  newItems.map((i) => ({ sku: i.sku, name: i.name, qtyOrdered: i.qty, qtyReceived: 0, price: i.price })),
-      total:  newTotal,
-      date:   new Date().toLocaleDateString("es-PR", { day: "numeric", month: "short" }),
+      items: newItems.map((i) => ({ sku: i.sku, name: i.name, qtyOrdered: i.qty, qtyReceived: 0, price: i.price })),
+      total: newTotal,
+      date: "12 Abr",
       status: "borrador",
     };
     setPOs((prev) => [po, ...prev]);
@@ -221,327 +153,197 @@ export default function Compras() {
     toast.success(`${po.id} creada exitosamente`);
   };
 
-  // OCR — editable results
-  const triggerOCR = () => {
-    setOcrProcessing(true);
-    setOcrItems(null);
-    setTimeout(() => {
-      setOcrProcessing(false);
-      setOcrItems([
-        { sku: "FM-010", name: "Harina T-55 25kg",        qty: 15, price: 42.00 },
-        { sku: "DF-001", name: "Mantequilla 1lb",          qty: 30, price: 4.80  },
-        { sku: "HC-005", name: "Huevos Grado A (caja 30)", qty: 10, price: 17.00 },
-      ]);
-    }, 2500);
-  };
-
+  // OCR simulation
   const handleOCRDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setOcrDragging(false);
-    triggerOCR();
+    setOcrProcessing(true);
+    setOcrResults(null);
+    setTimeout(() => {
+      setOcrProcessing(false);
+      setOcrResults([
+        { sku: "FM-010", name: "Harina T-55 25kg", qty: 15, price: 42.00 },
+        { sku: "DF-001", name: "Mantequilla 1lb", qty: 30, price: 4.80 },
+        { sku: "HC-005", name: "Huevos Grado A (caja 30)", qty: 10, price: 17.00 },
+      ]);
+    }, 2500);
   }, []);
 
-  const updateOcrItem = (idx: number, field: keyof OcrItem, value: string | number) =>
-    setOcrItems((prev) => prev ? prev.map((item, i) => (i === idx ? { ...item, [field]: value } : item)) : prev);
-
-  const removeOcrItem = (idx: number) =>
-    setOcrItems((prev) => prev ? prev.filter((_, i) => i !== idx) : prev);
-
   const confirmOCR = () => {
-    if (!ocrItems) return;
+    if (!ocrResults) return;
     const po: PO = {
-      id:     `PO-${121 + pos.length}`,
+      id: `PO-${121 + pos.length}`,
       vendor: "Proveedor (OCR)",
-      items:  ocrItems.map((i) => ({ sku: i.sku, name: i.name, qtyOrdered: i.qty, qtyReceived: 0, price: i.price })),
-      total:  ocrItems.reduce((s, i) => s + i.qty * i.price, 0),
-      date:   new Date().toLocaleDateString("es-PR", { day: "numeric", month: "short" }),
+      items: ocrResults.map((i) => ({ sku: i.sku, name: i.name, qtyOrdered: i.qty, qtyReceived: 0, price: i.price })),
+      total: ocrResults.reduce((s, i) => s + i.qty * i.price, 0),
+      date: "12 Abr",
       status: "borrador",
     };
     setPOs((prev) => [po, ...prev]);
-    setOcrItems(null);
+    setOcrResults(null);
     toast.success(`${po.id} creada desde factura OCR`);
   };
-
-  // Active POs for main table
-  const activePOs = pos.filter((p) => p.status !== "recibida" || activeTab === "activas");
 
   return (
     <DashboardLayout>
       <div className="space-y-6">
-
-        {/* ── Header ── */}
+        {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 animate-fade-in">
           <div>
-            <h1 className="text-2xl font-bold">Compras & Recepciones</h1>
+            <h1 className="page-title">Compras & Recepciones</h1>
             <p className="text-sm text-muted-foreground">Órdenes de compra, recepciones y facturas</p>
           </div>
-          <Button
-            size="sm"
-            className="gap-2 active:scale-95 transition-all text-white"
-            style={{ backgroundColor: "#0F6E56" }}
-            onClick={() => setNewModal(true)}
-          >
+          <Button size="sm" className="gap-2 bg-primary hover:bg-primary/90 active:scale-95 transition-all" onClick={() => setNewModal(true)}>
             <Plus className="w-3.5 h-3.5" /> Nueva Compra
           </Button>
         </div>
 
-        {/* ── Summary cards ── */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 animate-fade-in">
-          <Card>
-            <CardContent className="flex items-center gap-4 p-4">
-              <div className="rounded-full p-2.5" style={{ backgroundColor: "#0F6E5615" }}>
-                <ShoppingCart className="w-5 h-5" style={{ color: "#0F6E56" }} />
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Total POs</p>
-                <p className="text-2xl font-bold">{totalPOs}</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="flex items-center gap-4 p-4">
-              <div className="rounded-full p-2.5 bg-amber-50">
-                <PackageCheck className="w-5 h-5 text-amber-600" />
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Pendiente Recepción</p>
-                <p className="text-2xl font-bold">{pendingRecv}</p>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="flex items-center gap-4 p-4">
-              <div className="rounded-full p-2.5 bg-emerald-50">
-                <DollarSign className="w-5 h-5 text-emerald-700" />
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Gasto del Mes</p>
-                <p className="text-2xl font-bold">${monthSpend.toLocaleString("en-US", { minimumFractionDigits: 0 })}</p>
-              </div>
-            </CardContent>
-          </Card>
+        {/* Stat chips */}
+        <div className="flex flex-wrap gap-2 animate-fade-in">
+          <Badge variant="outline" className="bg-info/10 text-info border-info/30 gap-1.5 py-1.5 px-3 text-xs">
+            <ShoppingCart className="w-3.5 h-3.5" /> Órdenes Abiertas: <span className="font-bold">{openCount}</span>
+          </Badge>
+          <Badge variant="outline" className="bg-warning/10 text-warning border-warning/30 gap-1.5 py-1.5 px-3 text-xs">
+            <PackageCheck className="w-3.5 h-3.5" /> Pendiente Recepción: <span className="font-bold">{pendingRecv}</span>
+          </Badge>
+          <Badge variant="outline" className="bg-success/10 text-success border-success/30 gap-1.5 py-1.5 px-3 text-xs">
+            Gasto del Mes: <span className="font-bold">${monthSpend.toLocaleString()}</span>
+          </Badge>
         </div>
 
-        {/* ── Tabs ── */}
-        <div className="flex gap-1 border-b">
-          {(["activas", "historial"] as const).map((tab) => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`px-4 py-2 text-sm font-medium capitalize transition-colors border-b-2 -mb-px ${
-                activeTab === tab
-                  ? "border-[#0F6E56] text-[#0F6E56]"
-                  : "border-transparent text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {tab === "activas" ? "Órdenes Activas" : "Historial (30 días)"}
-            </button>
-          ))}
-        </div>
-
-        {/* ── Historial tab ── */}
-        {activeTab === "historial" && (
-          <div className="space-y-4 animate-fade-in">
-            <div className="flex items-center justify-between">
-              <p className="text-sm text-muted-foreground">{historial.length} POs completadas</p>
-              <p className="text-sm font-semibold">Total: <span style={{ color: "#0F6E56" }}>${historialTotal.toLocaleString("en-US", { minimumFractionDigits: 2 })}</span></p>
-            </div>
-            <HistorialChart pos={pos} />
-            {historial.length === 0 ? (
-              <EmptyState
-                icon={<History className="w-7 h-7 text-muted-foreground" />}
-                title="Sin historial"
-                description="Las órdenes recibidas aparecerán aquí."
-              />
-            ) : (
-              <Card className="overflow-hidden">
-                <CardContent className="p-0">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b bg-muted/50">
-                          <th className="text-left p-4 font-semibold text-muted-foreground">PO#</th>
-                          <th className="text-left p-4 font-semibold text-muted-foreground">Proveedor</th>
-                          <th className="text-left p-4 font-semibold text-muted-foreground">Productos</th>
-                          <th className="text-left p-4 font-semibold text-muted-foreground">Total</th>
-                          <th className="text-left p-4 font-semibold text-muted-foreground hidden sm:table-cell">Fecha</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {historial.map((po) => (
-                          <tr key={po.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
-                            <td className="p-4 font-semibold">{po.id}</td>
-                            <td className="p-4">{po.vendor}</td>
-                            <td className="p-4">
-                              <Badge variant="outline" className="text-xs">{po.items.length}</Badge>
-                            </td>
-                            <td className="p-4 font-semibold" style={{ color: "#0F6E56" }}>
-                              ${po.total.toLocaleString("en-US", { minimumFractionDigits: 2 })}
-                            </td>
-                            <td className="p-4 text-muted-foreground hidden sm:table-cell">{po.date}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                      <tfoot>
-                        <tr className="bg-muted/30">
-                          <td colSpan={3} className="p-4 text-right font-semibold text-sm">Total período:</td>
-                          <td className="p-4 font-bold" style={{ color: "#0F6E56" }}>
-                            ${historialTotal.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+        {/* Main table */}
+        {loading ? (
+          <TableSkeleton rows={5} cols={7} />
+        ) : pos.length === 0 ? (
+          <EmptyState icon={<ShoppingCart className="w-7 h-7 text-muted-foreground" />} title="Sin órdenes de compra" description="Crea tu primera orden de compra." />
+        ) : (
+          <Card className="overflow-hidden shadow-sm animate-fade-in">
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b">
+                      <th className="table-header">PO#</th>
+                      <th className="table-header">Proveedor</th>
+                      <th className="table-header">Productos</th>
+                      <th className="table-header">Monto</th>
+                      <th className="table-header hidden sm:table-cell">Fecha</th>
+                      <th className="table-header">Estado</th>
+                      <th className="table-header">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pos.map((po) => (
+                      <>
+                        <tr key={po.id} className="border-b hover:bg-muted/30 transition-colors">
+                          <td className="p-4 font-semibold">{po.id}</td>
+                          <td className="p-4">{po.vendor}</td>
+                          <td className="p-4">
+                            <Badge variant="outline" className="text-xs">{po.items.length}</Badge>
                           </td>
-                          <td className="hidden sm:table-cell" />
-                        </tr>
-                      </tfoot>
-                    </table>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-          </div>
-        )}
-
-        {/* ── Active POs table ── */}
-        {activeTab === "activas" && (
-          loading ? (
-            <TableSkeleton rows={5} cols={7} />
-          ) : activePOs.filter((p) => p.status !== "recibida").length === 0 ? (
-            <EmptyState
-              icon={<ShoppingCart className="w-7 h-7 text-muted-foreground" />}
-              title="Sin órdenes activas"
-              description="Todas las órdenes están completadas o canceladas."
-            />
-          ) : (
-            <Card className="overflow-hidden animate-fade-in">
-              <CardContent className="p-0">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b bg-muted/50">
-                        <th className="text-left p-4 font-semibold text-muted-foreground">PO#</th>
-                        <th className="text-left p-4 font-semibold text-muted-foreground">Proveedor</th>
-                        <th className="text-left p-4 font-semibold text-muted-foreground">Recepción</th>
-                        <th className="text-left p-4 font-semibold text-muted-foreground">Monto</th>
-                        <th className="text-left p-4 font-semibold text-muted-foreground hidden sm:table-cell">Fecha</th>
-                        <th className="text-left p-4 font-semibold text-muted-foreground">Estado</th>
-                        <th className="text-left p-4 font-semibold text-muted-foreground">Acciones</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {pos.filter((p) => p.status !== "recibida").map((po) => (
-                        <>
-                          <tr key={po.id} className="border-b hover:bg-muted/30 transition-colors">
-                            <td className="p-4 font-semibold">{po.id}</td>
-                            <td className="p-4">{po.vendor}</td>
-                            <td className="p-4">
-                              <ReceiptProgress items={po.items} />
-                            </td>
-                            <td className="p-4 font-semibold">
-                              ${po.total.toLocaleString("en-US", { minimumFractionDigits: 2 })}
-                            </td>
-                            <td className="p-4 text-muted-foreground hidden sm:table-cell">{po.date}</td>
-                            <td className="p-4">
-                              <Badge variant="outline" className={`text-[10px] ${STATUS_STYLE[po.status]}`}>
-                                {STATUS_LABEL[po.status]}
-                              </Badge>
-                            </td>
-                            <td className="p-4">
-                              <div className="flex gap-1.5">
-                                {po.status === "enviada" && (
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="text-xs h-7 px-2 hover:bg-emerald-50 hover:text-emerald-700 active:scale-95 transition-all"
-                                    onClick={() => openReceive(po)}
-                                  >
-                                    Recibir
-                                  </Button>
-                                )}
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="text-xs h-7 px-2 active:scale-95 transition-all"
-                                  onClick={() => setExpandedRow(expandedRow === po.id ? null : po.id)}
-                                >
-                                  <Eye className="w-3.5 h-3.5 mr-1" />
-                                  Ver
-                                  <ChevronDown className={`w-3 h-3 ml-1 transition-transform ${expandedRow === po.id ? "rotate-180" : ""}`} />
+                          <td className="p-4 font-semibold">${po.total.toLocaleString("en-US", { minimumFractionDigits: 2 })}</td>
+                          <td className="p-4 text-muted-foreground hidden sm:table-cell">{po.date}</td>
+                          <td className="p-4">
+                            <Badge variant="outline" className={`text-[10px] ${statusStyle[po.status]}`}>
+                              {statusLabel[po.status]}
+                            </Badge>
+                          </td>
+                          <td className="p-4">
+                            <div className="flex gap-1.5">
+                              {po.status === "enviada" && (
+                                <Button variant="outline" size="sm" className="text-xs h-7 px-2 hover:bg-success/10 hover:text-success active:scale-95 transition-all" onClick={() => openReceive(po)}>
+                                  Recibir
                                 </Button>
+                              )}
+                              <Button variant="ghost" size="sm" className="text-xs h-7 px-2 active:scale-95 transition-all" onClick={() => setExpandedRow(expandedRow === po.id ? null : po.id)}>
+                                <Eye className="w-3.5 h-3.5 mr-1" />
+                                Ver
+                                <ChevronDown className={`w-3 h-3 ml-1 transition-transform ${expandedRow === po.id ? "rotate-180" : ""}`} />
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                        {expandedRow === po.id && (
+                          <tr key={`${po.id}-detail`} className="border-b">
+                            <td colSpan={7} className="p-0">
+                              <div className="bg-muted/20 p-4">
+                                <p className="text-xs font-semibold text-muted-foreground mb-2">Líneas de {po.id}</p>
+                                <table className="w-full text-xs">
+                                  <thead>
+                                    <tr className="border-b">
+                                      <th className="text-left p-2 font-semibold text-muted-foreground">SKU</th>
+                                      <th className="text-left p-2 font-semibold text-muted-foreground">Producto</th>
+                                      <th className="text-left p-2 font-semibold text-muted-foreground">Cant. Ordenada</th>
+                                      <th className="text-left p-2 font-semibold text-muted-foreground">Cant. Recibida</th>
+                                      <th className="text-left p-2 font-semibold text-muted-foreground">Diferencia</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {po.items.map((item) => {
+                                      const diff = item.qtyReceived - item.qtyOrdered;
+                                      return (
+                                        <tr key={item.sku} className="border-b last:border-0">
+                                          <td className="p-2 font-mono">{item.sku}</td>
+                                          <td className="p-2">{item.name}</td>
+                                          <td className="p-2">{item.qtyOrdered}</td>
+                                          <td className="p-2">{item.qtyReceived}</td>
+                                          <td className={`p-2 font-semibold ${diff < 0 ? "text-destructive" : diff === 0 ? "text-muted-foreground" : "text-success"}`}>
+                                            {diff > 0 ? `+${diff}` : diff}
+                                          </td>
+                                        </tr>
+                                      );
+                                    })}
+                                  </tbody>
+                                </table>
                               </div>
                             </td>
                           </tr>
-                          {expandedRow === po.id && (
-                            <tr key={`${po.id}-detail`} className="border-b">
-                              <td colSpan={7} className="p-0">
-                                <div className="bg-muted/20 p-4">
-                                  <p className="text-xs font-semibold text-muted-foreground mb-2">Líneas de {po.id}</p>
-                                  <table className="w-full text-xs">
-                                    <thead>
-                                      <tr className="border-b">
-                                        <th className="text-left p-2 font-semibold text-muted-foreground">SKU</th>
-                                        <th className="text-left p-2 font-semibold text-muted-foreground">Producto</th>
-                                        <th className="text-left p-2 font-semibold text-muted-foreground">Ordenado</th>
-                                        <th className="text-left p-2 font-semibold text-muted-foreground">Recibido</th>
-                                        <th className="text-left p-2 font-semibold text-muted-foreground">Diff</th>
-                                      </tr>
-                                    </thead>
-                                    <tbody>
-                                      {po.items.map((item) => {
-                                        const diff = item.qtyReceived - item.qtyOrdered;
-                                        return (
-                                          <tr key={item.sku} className="border-b last:border-0">
-                                            <td className="p-2 font-mono">{item.sku}</td>
-                                            <td className="p-2">{item.name}</td>
-                                            <td className="p-2">{item.qtyOrdered}</td>
-                                            <td className="p-2">{item.qtyReceived}</td>
-                                            <td className={`p-2 font-semibold ${diff < 0 ? "text-destructive" : diff === 0 ? "text-muted-foreground" : "text-emerald-700"}`}>
-                                              {diff > 0 ? `+${diff}` : diff}
-                                            </td>
-                                          </tr>
-                                        );
-                                      })}
-                                    </tbody>
-                                  </table>
-                                </div>
-                              </td>
-                            </tr>
-                          )}
-                        </>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </CardContent>
-            </Card>
-          )
+                        )}
+                      </>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
         )}
 
-        {/* ── OCR Section ── */}
+        {/* OCR Section */}
         <Card className="animate-fade-in">
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2">
-              <Sparkles className="w-4 h-4" style={{ color: "#0F6E56" }} /> Captura de Factura con IA
+              <Sparkles className="w-4 h-4 text-primary" /> Captura de Factura con IA
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {!ocrItems && !ocrProcessing && (
-              <div
-                className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors cursor-pointer ${
-                  ocrDragging ? "border-[#0F6E56] bg-emerald-50/50" : "border-border hover:border-[#0F6E56]/50"
-                }`}
-                onDragOver={(e) => { e.preventDefault(); setOcrDragging(true); }}
-                onDragLeave={() => setOcrDragging(false)}
-                onDrop={handleOCRDrop}
-                onClick={triggerOCR}
-              >
-                <Upload className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
-                <p className="text-sm font-medium">Arrastra un PDF o imagen de factura aquí</p>
-                <p className="text-xs text-muted-foreground mt-1">o haz clic para seleccionar archivo</p>
-              </div>
-            )}
+            <div
+              className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors cursor-pointer ${ocrDragging ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"}`}
+              onDragOver={(e) => { e.preventDefault(); setOcrDragging(true); }}
+              onDragLeave={() => setOcrDragging(false)}
+              onDrop={handleOCRDrop}
+              onClick={() => {
+                // simulate file select
+                setOcrProcessing(true);
+                setOcrResults(null);
+                setTimeout(() => {
+                  setOcrProcessing(false);
+                  setOcrResults([
+                    { sku: "FM-010", name: "Harina T-55 25kg", qty: 15, price: 42.00 },
+                    { sku: "DF-001", name: "Mantequilla 1lb", qty: 30, price: 4.80 },
+                    { sku: "HC-005", name: "Huevos Grado A (caja 30)", qty: 10, price: 17.00 },
+                  ]);
+                }, 2500);
+              }}
+            >
+              <Upload className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
+              <p className="text-sm font-medium">Arrastra un PDF o imagen de factura aquí</p>
+              <p className="text-xs text-muted-foreground mt-1">o haz clic para seleccionar archivo</p>
+            </div>
 
             {ocrProcessing && (
               <div className="space-y-3 p-4 rounded-lg bg-muted/30">
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Sparkles className="w-4 h-4 animate-pulse" style={{ color: "#0F6E56" }} /> Procesando con IA...
+                  <Sparkles className="w-4 h-4 text-primary animate-pulse" /> Procesando con IA...
                 </div>
                 <div className="space-y-2">
                   <Skeleton className="h-4 w-3/4" />
@@ -551,110 +353,44 @@ export default function Compras() {
               </div>
             )}
 
-            {ocrItems && (
+            {ocrResults && (
               <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <p className="text-sm font-semibold">Líneas extraídas — edita antes de confirmar</p>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-xs h-7 gap-1 active:scale-95"
-                    onClick={() => setOcrItems((prev) => prev ? [...prev, { sku: "", name: "", qty: 1, price: 0 }] : prev)}
-                  >
-                    <Plus className="w-3 h-3" /> Añadir línea
-                  </Button>
-                </div>
+                <p className="text-sm font-semibold">Líneas extraídas — revisa antes de confirmar</p>
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs">
                     <thead>
                       <tr className="border-b bg-muted/50">
                         <th className="text-left p-2 font-semibold text-muted-foreground">SKU</th>
                         <th className="text-left p-2 font-semibold text-muted-foreground">Producto</th>
-                        <th className="text-left p-2 font-semibold text-muted-foreground">Cant.</th>
+                        <th className="text-left p-2 font-semibold text-muted-foreground">Cantidad</th>
                         <th className="text-left p-2 font-semibold text-muted-foreground">Precio</th>
                         <th className="text-left p-2 font-semibold text-muted-foreground">Subtotal</th>
-                        <th className="p-2" />
                       </tr>
                     </thead>
                     <tbody>
-                      {ocrItems.map((item, i) => (
+                      {ocrResults.map((item, i) => (
                         <tr key={i} className="border-b last:border-0">
-                          <td className="p-1">
-                            <Input
-                              value={item.sku}
-                              onChange={(e) => updateOcrItem(i, "sku", e.target.value)}
-                              className="h-7 text-xs font-mono w-24"
-                            />
-                          </td>
-                          <td className="p-1">
-                            <Input
-                              value={item.name}
-                              onChange={(e) => updateOcrItem(i, "name", e.target.value)}
-                              className="h-7 text-xs min-w-[140px]"
-                            />
-                          </td>
-                          <td className="p-1">
-                            <Input
-                              type="number"
-                              value={item.qty}
-                              min={1}
-                              onChange={(e) => updateOcrItem(i, "qty", parseInt(e.target.value) || 0)}
-                              className="h-7 text-xs w-16 text-center"
-                            />
-                          </td>
-                          <td className="p-1">
-                            <Input
-                              type="number"
-                              value={item.price}
-                              min={0}
-                              step={0.01}
-                              onChange={(e) => updateOcrItem(i, "price", parseFloat(e.target.value) || 0)}
-                              className="h-7 text-xs w-20 text-center"
-                            />
-                          </td>
-                          <td className="p-2 font-semibold whitespace-nowrap">
-                            ${(item.qty * item.price).toFixed(2)}
-                          </td>
-                          <td className="p-1">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
-                              onClick={() => removeOcrItem(i)}
-                              disabled={ocrItems.length <= 1}
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </Button>
-                          </td>
+                          <td className="p-2 font-mono">{item.sku}</td>
+                          <td className="p-2">{item.name}</td>
+                          <td className="p-2">{item.qty}</td>
+                          <td className="p-2">${item.price.toFixed(2)}</td>
+                          <td className="p-2 font-semibold">${(item.qty * item.price).toFixed(2)}</td>
                         </tr>
                       ))}
                     </tbody>
                     <tfoot>
                       <tr className="bg-muted/30">
                         <td colSpan={4} className="p-2 text-right font-semibold">Total:</td>
-                        <td className="p-2 font-bold" style={{ color: "#0F6E56" }}>
-                          ${ocrItems.reduce((s, i) => s + i.qty * i.price, 0).toFixed(2)}
-                        </td>
-                        <td />
+                        <td className="p-2 font-bold">${ocrResults.reduce((s, i) => s + i.qty * i.price, 0).toFixed(2)}</td>
                       </tr>
                     </tfoot>
                   </table>
                 </div>
                 <div className="flex gap-2">
-                  <Button
-                    size="sm"
-                    className="active:scale-95 transition-all text-white"
-                    style={{ backgroundColor: "#0F6E56" }}
-                    onClick={confirmOCR}
-                  >
+                  <Button size="sm" className="bg-primary hover:bg-primary/90 active:scale-95 transition-all" onClick={confirmOCR}>
                     Confirmar y crear PO
                   </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="active:scale-95 transition-all"
-                    onClick={() => setOcrItems(null)}
-                  >
+                  <Button variant="outline" size="sm" className="active:scale-95 transition-all" onClick={() => setOcrResults(null)}>
                     Descartar
                   </Button>
                 </div>
@@ -664,7 +400,7 @@ export default function Compras() {
         </Card>
       </div>
 
-      {/* ── Receive Modal ── */}
+      {/* Receive Modal */}
       <Dialog open={!!receiveModal} onOpenChange={(open) => { if (!open) setReceiveModal(null); }}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
@@ -687,11 +423,11 @@ export default function Compras() {
                     value={receiveQtys[i] ?? 0}
                     onChange={(e) => {
                       const val = parseInt(e.target.value) || 0;
-                      setReceiveQtys((prev) => prev.map((q, j) => (j === i ? val : q)));
+                      setReceiveQtys((prev) => prev.map((q, j) => j === i ? val : q));
                     }}
                   />
                   {diff !== 0 && (
-                    <span className={`text-xs font-semibold min-w-[40px] text-right ${diff < 0 ? "text-destructive" : "text-emerald-700"}`}>
+                    <span className={`text-xs font-semibold min-w-[40px] text-right ${diff < 0 ? "text-destructive" : "text-success"}`}>
                       {diff > 0 ? `+${diff}` : diff}
                     </span>
                   )}
@@ -699,17 +435,13 @@ export default function Compras() {
               );
             })}
           </div>
-          <Button
-            className="w-full active:scale-95 transition-all mt-2 text-white"
-            style={{ backgroundColor: "#0F6E56" }}
-            onClick={confirmReceive}
-          >
+          <Button className="w-full bg-primary hover:bg-primary/90 active:scale-95 transition-all mt-2" onClick={confirmReceive}>
             Confirmar Recepción
           </Button>
         </DialogContent>
       </Dialog>
 
-      {/* ── New PO Modal ── */}
+      {/* New PO Modal */}
       <Dialog open={newModal} onOpenChange={(open) => { if (!open) setNewModal(false); }}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
@@ -722,9 +454,7 @@ export default function Compras() {
                 <SelectValue placeholder="Seleccionar proveedor" />
               </SelectTrigger>
               <SelectContent>
-                {vendorList.map((v) => (
-                  <SelectItem key={v} value={v}>{v}</SelectItem>
-                ))}
+                {vendors.map((v) => <SelectItem key={v} value={v}>{v}</SelectItem>)}
               </SelectContent>
             </Select>
 
@@ -732,10 +462,10 @@ export default function Compras() {
               <p className="text-xs font-semibold text-muted-foreground">Líneas</p>
               {newItems.map((item, i) => (
                 <div key={i} className="grid grid-cols-[1fr_1.5fr_0.7fr_0.7fr_auto] gap-2 items-center">
-                  <Input placeholder="SKU"    value={item.sku}   onChange={(e) => updateNewItem(i, "sku",   e.target.value)}                   className="text-xs" />
-                  <Input placeholder="Nombre" value={item.name}  onChange={(e) => updateNewItem(i, "name",  e.target.value)}                   className="text-xs" />
-                  <Input type="number" placeholder="Cant"   min={1}    value={item.qty}   onChange={(e) => updateNewItem(i, "qty",   parseInt(e.target.value)   || 0)} className="text-xs" />
-                  <Input type="number" placeholder="Precio" min={0} step={0.01} value={item.price}  onChange={(e) => updateNewItem(i, "price", parseFloat(e.target.value) || 0)} className="text-xs" />
+                  <Input placeholder="SKU" value={item.sku} onChange={(e) => updateNewItem(i, "sku", e.target.value)} className="text-xs" />
+                  <Input placeholder="Nombre" value={item.name} onChange={(e) => updateNewItem(i, "name", e.target.value)} className="text-xs" />
+                  <Input type="number" placeholder="Cant" min={1} value={item.qty} onChange={(e) => updateNewItem(i, "qty", parseInt(e.target.value) || 0)} className="text-xs" />
+                  <Input type="number" placeholder="Precio" min={0} step={0.01} value={item.price} onChange={(e) => updateNewItem(i, "price", parseFloat(e.target.value) || 0)} className="text-xs" />
                   <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive" onClick={() => removeNewItem(i)} disabled={newItems.length <= 1}>
                     <Trash2 className="w-3.5 h-3.5" />
                   </Button>
@@ -748,14 +478,10 @@ export default function Compras() {
 
             <div className="flex justify-between items-center pt-2 border-t">
               <span className="text-sm font-semibold">Total:</span>
-              <span className="text-lg font-bold" style={{ color: "#0F6E56" }}>${newTotal.toFixed(2)}</span>
+              <span className="text-lg font-bold">${newTotal.toFixed(2)}</span>
             </div>
           </div>
-          <Button
-            className="w-full active:scale-95 transition-all text-white"
-            style={{ backgroundColor: "#0F6E56" }}
-            onClick={createPO}
-          >
+          <Button className="w-full bg-primary hover:bg-primary/90 active:scale-95 transition-all" onClick={createPO}>
             Crear Orden de Compra
           </Button>
         </DialogContent>
