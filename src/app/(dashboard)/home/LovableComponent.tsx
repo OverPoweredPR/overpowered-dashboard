@@ -1,9 +1,31 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { StatCardsSkeleton } from "@/components/Skeletons";
-import { Package, DollarSign, Clock, AlertTriangle, Plus, RefreshCw, FileText, ShoppingCart } from "lucide-react";
+import { Package, DollarSign, Clock, AlertTriangle, Plus, RefreshCw, FileText, ShoppingCart, Upload, CheckCheck, ClipboardCheck } from "lucide-react";
+import { toast } from "sonner";
+
+const sparklineData: Record<string, number[]> = {
+  "Órdenes hoy": [32, 38, 29, 41, 35, 44, 47],
+  "Ingresos hoy": [2800, 3100, 2950, 3400, 3200, 3600, 3842],
+  "Pagos pendientes": [18, 15, 20, 14, 16, 13, 12],
+  "Alertas activas": [3, 4, 2, 6, 3, 4, 5],
+};
+
+function MiniSparkline({ data, color }: { data: number[]; color: string }) {
+  const min = Math.min(...data);
+  const max = Math.max(...data);
+  const range = max - min || 1;
+  const h = 24;
+  const w = 80;
+  const points = data.map((v, i) => `${(i / (data.length - 1)) * w},${h - ((v - min) / range) * h}`).join(" ");
+  return (
+    <svg width={w} height={h} className="mt-1.5" viewBox={`0 0 ${w} ${h}`}>
+      <polyline fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" points={points} />
+    </svg>
+  );
+}
 
 const stats = [
   { label: "Órdenes hoy", value: "47", change: "+12%", icon: Package, color: "text-primary" },
@@ -11,6 +33,12 @@ const stats = [
   { label: "Pagos pendientes", value: "12", change: "-3", icon: Clock, color: "text-warning" },
   { label: "Alertas activas", value: "5", change: "+2", icon: AlertTriangle, color: "text-destructive" },
 ];
+
+const sparkColors: Record<string, string> = {
+  "text-primary": "#0F6E56",
+  "text-warning": "#F59E0B",
+  "text-destructive": "#EF4444",
+};
 
 const alerts = [
   { id: 1, message: "Inventario bajo: Harina de trigo (15 lbs restantes)", severity: "error", time: "Hace 5 min" },
@@ -31,18 +59,59 @@ const quickActions = [
   { label: "Sincronizar POS", icon: RefreshCw },
   { label: "Crear Factura", icon: FileText },
   { label: "Orden de Compra", icon: ShoppingCart },
+  { label: "Subir Evidencia", icon: Upload },
+  { label: "Reconciliar Stock", icon: ClipboardCheck },
 ];
+
+function formatTime(d: Date) {
+  return d.toLocaleTimeString("es-PR", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+}
 
 export default function Index() {
   const [loading, setLoading] = useState(true);
-  useEffect(() => { const t = setTimeout(() => setLoading(false), 600); return () => clearTimeout(t); }, []);
+  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+  const [refreshing, setRefreshing] = useState(false);
+
+  const loadData = useCallback(() => {
+    setLoading(true);
+    const t = setTimeout(() => {
+      setLoading(false);
+      setLastUpdated(new Date());
+      setRefreshing(false);
+    }, 600);
+    return () => clearTimeout(t);
+  }, []);
+
+  useEffect(() => { const cleanup = loadData(); return cleanup; }, [loadData]);
+
+  const handleRefresh = () => {
+    setRefreshing(true);
+    loadData();
+  };
+
+  const handleAcknowledgeAll = () => {
+    toast.success("Todas las alertas han sido reconocidas");
+  };
 
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        <div className="animate-fade-in">
-          <h1 className="page-title">Buenos días ☀️</h1>
-          <p className="text-muted-foreground text-sm mt-1">Panel de operaciones — 12 de abril, 2026</p>
+        <div className="animate-fade-in flex items-start justify-between gap-4">
+          <div>
+            <h1 className="page-title">Buenos días ☀️</h1>
+            <p className="text-muted-foreground text-sm mt-1">Panel de operaciones — 12 de abril, 2026</p>
+            <p className="text-xs text-muted-foreground/60 mt-0.5">Última actualización: {formatTime(lastUpdated)}</p>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className="shrink-0 gap-1.5 hover:bg-primary/10 hover:border-primary/30 hover:text-primary"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
+            <span className="hidden sm:inline">Refresh</span>
+          </Button>
         </div>
 
         {loading ? (
@@ -58,6 +127,7 @@ export default function Index() {
                   </div>
                   <p className="text-2xl font-bold text-foreground">{s.value}</p>
                   <p className="text-xs text-muted-foreground mt-1">{s.label}</p>
+                  <MiniSparkline data={sparklineData[s.label]} color={sparkColors[s.color] || "#0F6E56"} />
                 </CardContent>
               </Card>
             ))}
@@ -67,8 +137,17 @@ export default function Index() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 animate-fade-in" style={{ animationDelay: "200ms" }}>
             <Card className="shadow-sm">
-              <CardHeader className="pb-3">
+              <CardHeader className="pb-3 flex-row items-center justify-between space-y-0">
                 <CardTitle className="section-label">Alertas Recientes</CardTitle>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleAcknowledgeAll}
+                  className="text-xs gap-1 text-muted-foreground hover:text-primary"
+                >
+                  <CheckCheck className="h-3.5 w-3.5" />
+                  Acknowledge all
+                </Button>
               </CardHeader>
               <CardContent className="space-y-3">
                 {alerts.map((a) => (
