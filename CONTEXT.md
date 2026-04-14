@@ -390,3 +390,15 @@ Todos activos en localhost:5678. Stack completo operativo.
 - GlobalSearch — header search ✅
 - Keyboard shortcuts G+H/O/P/I ✅
 - Pull-to-refresh — Home y Órdenes ✅
+
+## Módulos nuevos — 2026-04-14 noche
+
+- Clientes ✅ /clientes
+- Proveedores ✅ /proveedores  
+- Empleados ✅ /empleados (en deploy)
+- Finanzas ✅ /finanzas (en Lovable)
+
+### Total módulos en producción: 12
+home, ordenes, pagos, inventario, compras,
+facturas, auditoria, resoluciones, settings,
+reportes, clientes, proveedores
