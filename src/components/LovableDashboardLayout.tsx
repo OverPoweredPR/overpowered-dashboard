@@ -17,7 +17,7 @@ const items = [
   { title: "Inventario", url: "/inventario", icon: BarChart3 },
   { title: "Compras", url: "/compras", icon: ShoppingCart },
   { title: "Facturas", url: "/facturas", icon: FileText },
-  { title: "Auditoría", url: "/auditoria", icon: Search },
+  { title: "Auditoría", url: "/auditoria", icon: Search, badge: 3 },
   { title: "Resoluciones", url: "/resoluciones", icon: CheckCircle },
 ];
 
@@ -77,7 +77,14 @@ export function AppSidebar() {
                         className="flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                         activeClassName="!bg-sidebar-primary !text-sidebar-primary-foreground hover:!bg-sidebar-primary hover:!text-sidebar-primary-foreground"
                       >
-                        <item.icon className="w-4 h-4 shrink-0" />
+                        <div className="relative shrink-0">
+                          <item.icon className="w-4 h-4" />
+                          {item.badge && item.badge > 0 && (
+                            <span className="absolute -top-1.5 -right-2 w-4 h-4 rounded-full bg-destructive text-destructive-foreground text-[9px] font-bold flex items-center justify-center">
+                              {item.badge}
+                            </span>
+                          )}
+                        </div>
                         {!collapsed && <span className="font-medium text-sm">{item.title}</span>}
                       </NavLink>
                     </SidebarMenuButton>

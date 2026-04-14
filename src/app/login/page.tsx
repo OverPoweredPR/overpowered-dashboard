@@ -1,12 +1,10 @@
-"use client";
-
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Mail, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
+import { Mail, Loader2, AlertCircle } from "lucide-react";
 
 type LoginState = "idle" | "loading" | "success" | "error";
 
@@ -17,9 +15,10 @@ export default function Login() {
   const [tenant, setTenant] = useState(TENANTS[0]);
   const [state, setState] = useState<LoginState>("idle");
   const [errorMsg, setErrorMsg] = useState("");
-  const router = useRouter();
+  const navigate = useNavigate();
 
   const isValidEmail = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.trim());
+  const showTenant = isValidEmail(email);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,12 +28,11 @@ export default function Login() {
       return;
     }
     setState("loading");
-    // Simulated delay — replace with real Supabase magic link call
     await new Promise((r) => setTimeout(r, 1500));
     localStorage.setItem("op_auth", email.trim());
     localStorage.setItem("op_tenant", tenant);
     setState("success");
-    setTimeout(() => router.push("/"), 2000);
+    setTimeout(() => navigate("/"), 2000);
   };
 
   return (
@@ -53,7 +51,7 @@ export default function Login() {
         </div>
 
         {state === "success" ? (
-          <div className="flex flex-col items-center text-center py-4">
+          <div className="flex flex-col items-center text-center py-4 animate-fade-in">
             <div className="w-16 h-16 rounded-full flex items-center justify-center mb-4 animate-bounce" style={{ backgroundColor: "rgba(15,110,86,0.15)" }}>
               <Mail className="h-8 w-8" style={{ color: "#0F6E56" }} />
             </div>
@@ -95,7 +93,9 @@ export default function Login() {
                 </div>
               )}
             </div>
-            <div>
+
+            {/* Tenant selector — appears after valid email */}
+            <div className={`transition-all duration-300 overflow-hidden ${showTenant ? "max-h-24 opacity-100" : "max-h-0 opacity-0"}`}>
               <label className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-1.5 block">
                 Seleccionar negocio
               </label>
@@ -112,6 +112,7 @@ export default function Login() {
                 </SelectContent>
               </Select>
             </div>
+
             <Button
               type="submit"
               className="w-full text-white font-medium active:scale-[0.98] transition-all"
