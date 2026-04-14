@@ -68,7 +68,7 @@ function NavLink({
 
 function Sidebar({ onClose }: { onClose?: () => void }) {
   return (
-    <aside className="flex flex-col h-full bg-sidebar text-white">
+    <aside className="flex flex-col h-full bg-[#0F1117] text-white">
       {/* Logo / Brand */}
       <div className="flex items-center justify-between px-4 py-5 border-b border-sidebar-border">
         <div>
