@@ -10,6 +10,7 @@ import { Drawer, DrawerContent, DrawerTrigger, DrawerClose } from "@/components/
 import { Bell, Home, Package, CreditCard, BarChart3, AlertTriangle, Info, XCircle, ShoppingCart, FileText, Shield, Scale, MoreHorizontal, PieChart, Settings, Plus, X, Moon, Sun } from "lucide-react";
 import { GlobalSearch } from "@/components/GlobalSearch";
 import { KeyboardShortcuts } from "@/components/KeyboardShortcuts";
+import { OnboardingTour } from "@/components/OnboardingTour";
 
 const quickActions = [
   { label: "Nueva Orden", emoji: "📦", url: "/ordenes" },
@@ -88,6 +89,7 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
   return (
     <SidebarProvider>
       <KeyboardShortcuts />
+      <OnboardingTour />
       <div className="min-h-screen flex w-full">
         <AppSidebar />
         <div className="flex-1 flex flex-col min-w-0">
@@ -210,7 +212,7 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
             })}
           </nav>
           {/* Mobile FAB */}
-          <div className="md:hidden">
+          <div data-tour="fab" className="md:hidden">
             {fabOpen && (
               <div
                 className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm transition-opacity"
