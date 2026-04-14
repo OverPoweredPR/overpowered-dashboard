@@ -1,322 +1,254 @@
-'use client'
+"use client";
+import { useState, useEffect, useCallback } from "react";
+import { DashboardLayout } from "@/components/DashboardLayout";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { StatCardsSkeleton } from "@/components/Skeletons";
+import { usePullRefresh } from "@/hooks/use-pull-refresh";
+import { Package, DollarSign, Clock, AlertTriangle, Plus, RefreshCw, FileText, ShoppingCart, Upload, CheckCheck, ClipboardCheck, CalendarClock } from "lucide-react";
+import { toast } from "sonner";
 
-import {
-  TrendingUp,
-  ShoppingCart,
-  CreditCard,
-  AlertTriangle,
-  CheckCircle,
-  Clock,
-  RefreshCw,
-  XCircle,
-  AlertCircle,
-  Loader2,
-} from 'lucide-react'
-import type { MetricCard } from '@/lib/types'
-import { useHome, useAuditoria, useRefreshDashboard } from '@/hooks/useDashboard'
-import type { Wf11Alert, Hallazgo } from '@/lib/api'
+const sparklineData: Record<string, number[]> = {
+  "Órdenes hoy": [32, 38, 29, 41, 35, 44, 47],
+  "Ingresos hoy": [2800, 3100, 2950, 3400, 3200, 3600, 3842],
+  "Pagos pendientes": [18, 15, 20, 14, 16, 13, 12],
+  "Alertas activas": [3, 4, 2, 6, 3, 4, 5],
+};
 
-// ─── Skeleton ─────────────────────────────────────────────────────────────────
-
-function Skeleton({ className }: { className?: string }) {
-  return <div className={`animate-pulse bg-slate-200 rounded ${className ?? ''}`} />
-}
-
-function MetricsSkeleton() {
+function MiniSparkline({ data, color }: { data: number[]; color: string }) {
+  const min = Math.min(...data);
+  const max = Math.max(...data);
+  const range = max - min || 1;
+  const h = 24;
+  const w = 80;
+  const points = data.map((v, i) => `${(i / (data.length - 1)) * w},${h - ((v - min) / range) * h}`).join(" ");
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-      {Array.from({ length: 4 }).map((_, i) => (
-        <div key={i} className="rounded-lg border border-slate-200 border-l-4 border-l-slate-200 p-4 shadow-sm bg-white space-y-2">
-          <Skeleton className="h-3 w-24" />
-          <Skeleton className="h-7 w-20" />
-          <Skeleton className="h-3 w-16" />
-        </div>
-      ))}
-    </div>
-  )
+    <svg width={w} height={h} className="mt-1.5" viewBox={`0 0 ${w} ${h}`}>
+      <polyline fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" points={points} />
+    </svg>
+  );
 }
 
-// ─── Error state ──────────────────────────────────────────────────────────────
+const stats = [
+  { label: "Órdenes hoy", value: "47", change: "+12%", icon: Package, color: "text-primary" },
+  { label: "Ingresos hoy", value: "$3,842", change: "+8%", icon: DollarSign, color: "text-primary" },
+  { label: "Pagos pendientes", value: "12", change: "-3", icon: Clock, color: "text-warning" },
+  { label: "Alertas activas", value: "5", change: "+2", icon: AlertTriangle, color: "text-destructive" },
+];
 
-function ErrorCard({ message, onRetry }: { message: string; onRetry: () => void }) {
-  return (
-    <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3">
-      <AlertCircle size={16} className="text-red-500 shrink-0" />
-      <p className="text-sm text-red-700 flex-1">{message}</p>
-      <button
-        onClick={onRetry}
-        className="text-xs font-medium text-red-600 hover:text-red-800 underline whitespace-nowrap"
-      >
-        Reintentar
-      </button>
-    </div>
-  )
+const sparkColors: Record<string, string> = {
+  "text-primary": "#0F6E56",
+  "text-warning": "#F59E0B",
+  "text-destructive": "#EF4444",
+};
+
+const alerts = [
+  { id: 1, message: "Inventario bajo: Harina de trigo (15 lbs restantes)", severity: "error", time: "Hace 5 min" },
+  { id: 2, message: "Pago #1042 vencido hace 3 días — Restaurante El Coquí", severity: "warning", time: "Hace 12 min" },
+  { id: 3, message: "Orden #2087 entregada exitosamente", severity: "info", time: "Hace 30 min" },
+  { id: 4, message: "Precio de mantequilla aumentó 8% — proveedor Dairy Fresh", severity: "warning", time: "Hace 1 hr" },
+  { id: 5, message: "Clover POS sincronizado — 23 transacciones importadas", severity: "info", time: "Hace 2 hr" },
+];
+
+const severityStyles: Record<string, string> = {
+  error: "bg-destructive/10 text-destructive border-destructive/20",
+  warning: "bg-warning/10 text-warning border-warning/20",
+  info: "bg-info/10 text-info border-info/20",
+};
+
+const quickActions = [
+  { label: "Nueva Orden", icon: Plus },
+  { label: "Sincronizar POS", icon: RefreshCw },
+  { label: "Crear Factura", icon: FileText },
+  { label: "Orden de Compra", icon: ShoppingCart },
+  { label: "Subir Evidencia", icon: Upload },
+  { label: "Reconciliar Stock", icon: ClipboardCheck },
+];
+
+function formatTime(d: Date) {
+  return d.toLocaleTimeString("es-PR", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 }
 
-// ─── Metric Card ──────────────────────────────────────────────────────────────
+export default function Index() {
+  const [loading, setLoading] = useState(true);
+  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+  const [refreshing, setRefreshing] = useState(false);
 
-function MetricCardWidget({ card }: { card: MetricCard }) {
-  const statusColors = {
-    ok:      'border-l-emerald-500 bg-white',
-    warning: 'border-l-amber-400  bg-white',
-    error:   'border-l-red-500    bg-white',
-  }
-  const deltaColors = {
-    ok:      'text-emerald-600',
-    warning: 'text-amber-600',
-    error:   'text-red-600',
-  }
-  const borderClass = statusColors[card.status ?? 'ok']
-  const deltaClass  = deltaColors[card.status ?? 'ok']
+  const loadData = useCallback(() => {
+    setLoading(true);
+    const t = setTimeout(() => {
+      setLoading(false);
+      setLastUpdated(new Date());
+      setRefreshing(false);
+    }, 600);
+    return () => clearTimeout(t);
+  }, []);
 
-  return (
-    <div className={`rounded-lg border border-slate-200 border-l-4 p-4 shadow-sm ${borderClass}`}>
-      <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">{card.label}</p>
-      <p className="mt-1 text-2xl font-bold text-slate-800">{card.value}</p>
-      {card.delta && <p className={`mt-0.5 text-xs font-medium ${deltaClass}`}>{card.delta}</p>}
-    </div>
-  )
-}
+  useEffect(() => { const cleanup = loadData(); return cleanup; }, [loadData]);
 
-// ─── Alert Row ────────────────────────────────────────────────────────────────
+  const handlePullRefresh = useCallback(async () => {
+    await new Promise((r) => setTimeout(r, 800));
+    setLastUpdated(new Date());
+    toast.success("Dashboard actualizado");
+  }, []);
 
-type AlertLevel = 'error' | 'warning' | 'info'
-type Alert = { id: string; level: AlertLevel; message: string; time: string; source: string }
+  const { containerRef, pullDistance, refreshing: pullRefreshing } = usePullRefresh({ onRefresh: handlePullRefresh });
 
-function AlertRow({ alert }: { alert: Alert }) {
-  const styles: Record<AlertLevel, { bg: string; icon: React.ReactNode }> = {
-    error:   { bg: 'bg-red-50 border-red-200',    icon: <XCircle       size={16} className="text-red-500 shrink-0"    /> },
-    warning: { bg: 'bg-amber-50 border-amber-200', icon: <AlertTriangle size={16} className="text-amber-500 shrink-0" /> },
-    info:    { bg: 'bg-blue-50 border-blue-200',   icon: <CheckCircle   size={16} className="text-blue-500 shrink-0"  /> },
-  }
-  const { bg, icon } = styles[alert.level]
-  return (
-    <div className={`flex items-start gap-3 rounded-lg border px-3 py-2.5 ${bg}`}>
-      <div className="mt-0.5">{icon}</div>
-      <div className="flex-1 min-w-0">
-        <p className="text-sm text-slate-700">{alert.message}</p>
-        <p className="text-xs text-slate-400 mt-0.5">{alert.source} · {alert.time}</p>
-      </div>
-    </div>
-  )
-}
+  const handleRefresh = () => {
+    setRefreshing(true);
+    loadData();
+  };
 
-// ─── Sync Status ──────────────────────────────────────────────────────────────
-
-function SyncStatusCard({
-  cloverStatus,
-  onRefresh,
-}: {
-  cloverStatus: 'ok' | 'error' | 'pending'
-  onRefresh: () => void
-}) {
-  const syncs = [
-    { label: 'WF11 Auditor',       time: 'Hoy 9:05 PM',  status: 'ok' as const        },
-    { label: 'WF7 POS → Shopify',  time: 'Hoy 8:00 PM',  status: cloverStatus          },
-    { label: 'WF3 Reconciliación', time: 'Hoy 11:59 PM', status: 'pending' as const    },
-  ]
-  const icons = {
-    ok:      <CheckCircle size={14} className="text-emerald-500" />,
-    pending: <Clock       size={14} className="text-amber-400"   />,
-    error:   <XCircle     size={14} className="text-red-500"     />,
-  }
-  return (
-    <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-4">
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-semibold text-slate-700">Estado de sincronización</h3>
-        <button onClick={onRefresh} className="text-slate-400 hover:text-indigo-600 transition-colors">
-          <RefreshCw size={14} />
-        </button>
-      </div>
-      <ul className="space-y-2">
-        {syncs.map((s) => (
-          <li key={s.label} className="flex items-center justify-between text-sm">
-            <span className="flex items-center gap-2 text-slate-600">{icons[s.status]}{s.label}</span>
-            <span className="text-xs text-slate-400">{s.time}</span>
-          </li>
-        ))}
-      </ul>
-    </div>
-  )
-}
-
-// ─── Audit Widget ─────────────────────────────────────────────────────────────
-
-function AuditWidget({ hallazgos }: { hallazgos: Hallazgo[] }) {
-  const SEV = {
-    error:   { icon: <XCircle       size={14} className="text-red-500    shrink-0" />, badge: 'bg-red-100   text-red-700'   },
-    warning: { icon: <AlertTriangle size={14} className="text-amber-500  shrink-0" />, badge: 'bg-amber-100 text-amber-700' },
-    info:    { icon: <CheckCircle   size={14} className="text-blue-500   shrink-0" />, badge: 'bg-blue-100  text-blue-700'  },
-  }
-
-  if (hallazgos.length === 0) {
-    return (
-      <div className="flex items-center gap-2 text-sm text-slate-400 bg-white rounded-lg border border-slate-200 px-3 py-4">
-        <CheckCircle size={16} className="text-emerald-500" /> Sin hallazgos sin resolver
-      </div>
-    )
-  }
+  const handleAcknowledgeAll = () => {
+    toast.success("Todas las alertas han sido reconocidas");
+  };
 
   return (
-    <div className="bg-white rounded-lg border border-slate-200 shadow-sm divide-y divide-slate-100">
-      {hallazgos.map((h) => {
-        const { icon, badge } = SEV[h.severidad] ?? SEV.info
-        return (
-          <div key={h.id} className="flex items-start gap-3 px-3 py-2.5">
-            <div className="mt-0.5">{icon}</div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm text-slate-700 truncate">{h.descripcion}</p>
-              <div className="flex items-center gap-2 mt-0.5">
-                <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${badge}`}>{h.severidad}</span>
-                <span className="text-xs text-slate-400">{h.workflow}</span>
-              </div>
-            </div>
-          </div>
-        )
-      })}
-    </div>
-  )
-}
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function fmt(n: number) {
-  return `$${n.toLocaleString('es-PR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-}
-
-function alertFromWf11(a: Wf11Alert): Alert {
-  const levelMap: Record<string, AlertLevel> = { alta: 'error', media: 'warning', baja: 'info' }
-  return { id: a.id, level: levelMap[a.severidad] ?? 'info', message: a.descripcion, time: 'WF11', source: a.tipo }
-}
-
-// ─── Page ─────────────────────────────────────────────────────────────────────
-
-export default function HomePage() {
-  const { data, isPending, error, refetch } = useHome()
-  const { data: audData } = useAuditoria()
-  const { refreshHome } = useRefreshDashboard()
-
-  const topHallazgos: Hallazgo[] = (audData?.sin_resolver ?? [])
-    .sort((a, b) => {
-      const rank = { error: 0, warning: 1, info: 2 } as Record<string, number>
-      return (rank[a.severidad] ?? 2) - (rank[b.severidad] ?? 2)
-    })
-    .slice(0, 3)
-
-  const metrics: MetricCard[] = data
-    ? [
-        { label: 'Ventas hoy',        value: fmt(data.ventas.revenue_hoy),      delta: `${data.ventas.delta_pct > 0 ? '+' : ''}${data.ventas.delta_pct.toFixed(1)}% vs ayer`, status: data.ventas.delta_pct >= 0 ? 'ok' : 'warning' },
-        { label: 'Órdenes activas',   value: data.ventas.ordenes_hoy,           delta: `${data.ventas.ordenes_pendientes_aprobacion} pendientes aprobación`,                   status: data.ventas.ordenes_pendientes_aprobacion > 0 ? 'warning' : 'ok' },
-        { label: 'Pagos pendientes',  value: fmt(data.pagos.pendiente_cobro),   delta: `${data.pagos.pagos_confirmados_hoy} confirmados hoy`,                                  status: data.pagos.pendiente_cobro > 0 ? 'warning' : 'ok' },
-        { label: 'Discrepancias',     value: data.inventario.discrepancias_activas, delta: `${data.inventario.productos_criticos} productos críticos`,                         status: data.inventario.discrepancias_activas > 0 ? 'error' : 'ok' },
-      ]
-    : []
-
-  const alerts: Alert[] = data?.sistema.wf11_alertas_activas.map(alertFromWf11) ?? []
-
-  return (
-    <div className="space-y-6 max-w-5xl">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-slate-800">Dashboard</h1>
-          <p className="text-sm text-slate-500 mt-0.5">Resumen operacional — Baguettes de PR</p>
-        </div>
-        {data && (
-          <button onClick={refreshHome} className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-indigo-600 transition-colors">
-            <RefreshCw size={13} /> Actualizar
-          </button>
-        )}
-      </div>
-
-      {error && <ErrorCard message={`No se pudo cargar el dashboard: ${error.message}`} onRetry={() => refetch()} />}
-
-      {/* Metrics */}
-      <section>
-        <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">Métricas del día</h2>
-        {isPending ? <MetricsSkeleton /> : (
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            {metrics.map((m) => <MetricCardWidget key={m.label} card={m} />)}
+    <DashboardLayout>
+      <div ref={containerRef} className="space-y-6">
+        {/* Pull indicator */}
+        {(pullDistance > 0 || pullRefreshing) && (
+          <div className="flex justify-center -mt-2 mb-2 md:hidden">
+            <RefreshCw className={`w-5 h-5 text-primary transition-transform ${pullRefreshing ? "animate-spin" : ""}`} style={{ transform: `rotate(${pullDistance * 3}deg)` }} />
           </div>
         )}
-      </section>
-
-      {/* Alerts + Sync */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <section className="lg:col-span-2">
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">Alertas activas</h2>
-          {isPending ? (
-            <div className="space-y-2">
-              {Array.from({ length: 2 }).map((_, i) => (
-                <div key={i} className="flex items-start gap-3 rounded-lg border px-3 py-2.5 bg-slate-50">
-                  <Skeleton className="h-4 w-4 mt-0.5 rounded-full" />
-                  <div className="flex-1 space-y-1.5"><Skeleton className="h-3.5 w-full" /><Skeleton className="h-3 w-32" /></div>
-                </div>
-              ))}
-            </div>
-          ) : alerts.length === 0 ? (
-            <div className="flex items-center gap-2 text-sm text-slate-400 bg-white rounded-lg border border-slate-200 px-3 py-4">
-              <CheckCircle size={16} className="text-emerald-500" /> Sin alertas activas
-            </div>
-          ) : (
-            <div className="space-y-2">{alerts.map((a) => <AlertRow key={a.id} alert={a} />)}</div>
-          )}
-        </section>
-
-        <section>
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">Workflows</h2>
-          {isPending ? (
-            <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-4 space-y-3">
-              <Skeleton className="h-4 w-32" />
-              {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-4 w-full" />)}
-            </div>
-          ) : (
-            <SyncStatusCard cloverStatus={data?.sistema.sync_clover_status ?? 'ok'} onRefresh={refreshHome} />
-          )}
-        </section>
-      </div>
-
-      {/* Auditoría — últimos hallazgos sin resolver */}
-      <section>
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400">Auditoría — sin resolver</h2>
-          <a href="/auditoria" className="text-xs text-indigo-600 hover:underline">Ver todo →</a>
+        <div className="animate-fade-in flex items-start justify-between gap-4">
+          <div>
+            <h1 className="page-title">Buenos días ☀️</h1>
+            <p className="text-muted-foreground text-sm mt-1">Panel de operaciones — 12 de abril, 2026</p>
+            <p className="text-xs text-muted-foreground/60 mt-0.5">Última actualización: {formatTime(lastUpdated)}</p>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className="shrink-0 gap-1.5 hover:bg-primary/10 hover:border-primary/30 hover:text-primary"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
+            <span className="hidden sm:inline">Refresh</span>
+          </Button>
         </div>
-        {!audData ? (
-          <div className="bg-white rounded-lg border border-slate-200 shadow-sm divide-y divide-slate-100">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="flex items-start gap-3 px-3 py-2.5">
-                <Skeleton className="h-4 w-4 mt-0.5 rounded-full" />
-                <div className="flex-1 space-y-1.5"><Skeleton className="h-3.5 w-full" /><Skeleton className="h-3 w-24" /></div>
-              </div>
+
+        {loading ? (
+          <StatCardsSkeleton />
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {stats.map((s, i) => (
+              <Card key={s.label} className="shadow-sm hover:shadow-md active:scale-[0.98] transition-all duration-200 cursor-pointer animate-fade-in" style={{ animationDelay: `${i * 80}ms` }}>
+                <CardContent className="p-5">
+                  <div className="flex items-center justify-between mb-3">
+                    <s.icon className={`h-5 w-5 ${s.color}`} />
+                    <span className="text-xs font-medium text-muted-foreground">{s.change}</span>
+                  </div>
+                  <p className="text-2xl font-bold text-foreground">{s.value}</p>
+                  <p className="text-xs text-muted-foreground mt-1">{s.label}</p>
+                  <MiniSparkline data={sparklineData[s.label]} color={sparkColors[s.color] || "#0F6E56"} />
+                </CardContent>
+              </Card>
             ))}
           </div>
-        ) : (
-          <AuditWidget hallazgos={topHallazgos} />
         )}
-      </section>
 
-      {/* Quick actions */}
-      <section>
-        <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">Acciones rápidas</h2>
-        <div className="flex flex-wrap gap-2">
-          {[
-            { label: 'Nueva factura',   icon: <CreditCard   size={14} /> },
-            { label: 'Ver órdenes',     icon: <ShoppingCart size={14} /> },
-            { label: 'Generar reporte', icon: <TrendingUp   size={14} /> },
-          ].map((a) => (
-            <button key={a.label} className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-white border border-slate-200 rounded-lg text-slate-600 hover:border-indigo-400 hover:text-indigo-600 transition-colors shadow-sm">
-              {a.icon}{a.label}
-            </button>
-          ))}
-        </div>
-      </section>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 animate-fade-in" style={{ animationDelay: "200ms" }}>
+            <Card className="shadow-sm">
+              <CardHeader className="pb-3 flex-row items-center justify-between space-y-0">
+                <CardTitle className="section-label">Alertas Recientes</CardTitle>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleAcknowledgeAll}
+                  className="text-xs gap-1 text-muted-foreground hover:text-primary"
+                >
+                  <CheckCheck className="h-3.5 w-3.5" />
+                  Acknowledge all
+                </Button>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {alerts.map((a) => (
+                  <div key={a.id} className={`flex items-start gap-3 p-3 rounded-lg border transition-colors hover:opacity-80 ${severityStyles[a.severity]}`}>
+                    <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium leading-snug">{a.message}</p>
+                      <p className="text-xs opacity-70 mt-1">{a.time}</p>
+                    </div>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          </div>
 
-      {isPending && (
-        <div className="flex items-center justify-center gap-2 text-sm text-slate-400 py-2">
-          <Loader2 size={14} className="animate-spin" /> Cargando datos…
+          <div className="space-y-4 animate-fade-in" style={{ animationDelay: "300ms" }}>
+            <Card className="shadow-sm">
+              <CardHeader className="pb-3">
+                <CardTitle className="section-label">Acciones Rápidas</CardTitle>
+              </CardHeader>
+              <CardContent className="grid grid-cols-2 gap-2">
+                {quickActions.map((a) => (
+                  <Button key={a.label} variant="outline" className="h-auto py-3 flex-col gap-1.5 text-xs font-medium hover:bg-primary/10 hover:border-primary/30 hover:text-primary active:scale-95 transition-all">
+                    <a.icon className="h-4 w-4" />
+                    {a.label}
+                  </Button>
+                ))}
+              </CardContent>
+            </Card>
+
+            <Card className="shadow-sm">
+              <CardHeader className="pb-3">
+                <CardTitle className="section-label">Clover POS</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-2.5 h-2.5 rounded-full bg-primary animate-pulse" />
+                  <span className="text-sm font-medium text-foreground">Conectado</span>
+                </div>
+                <div className="space-y-2 text-sm text-muted-foreground">
+                  <div className="flex justify-between"><span>Última sincronización</span><span className="font-medium text-foreground">11:42 AM</span></div>
+                  <div className="flex justify-between"><span>Transacciones hoy</span><span className="font-medium text-foreground">23</span></div>
+                  <div className="flex justify-between"><span>Errores</span><span className="font-medium text-foreground">0</span></div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </div>
-      )}
-    </div>
-  )
+
+        {/* Today's Schedule */}
+        <div className="animate-fade-in" style={{ animationDelay: "400ms" }}>
+          <Card className="shadow-sm">
+            <CardHeader className="pb-3 flex-row items-center justify-between space-y-0">
+              <CardTitle className="section-label flex items-center gap-2">
+                <CalendarClock className="h-4 w-4 text-primary" /> Agenda de Hoy
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {[
+                  { time: "7:00 AM", order: "ORD-2087", client: "Café La Plaza", items: "48 baguettes, 12 croissants", status: "En preparación" },
+                  { time: "8:30 AM", order: "ORD-2088", client: "Hotel Condado", items: "120 panecillos, 24 baguettes", status: "Pendiente" },
+                  { time: "10:00 AM", order: "ORD-2089", client: "Restaurante El Coquí", items: "36 baguettes, 6 tortas", status: "Pendiente" },
+                  { time: "12:00 PM", order: "ORD-2090", client: "Panadería Don Juan", items: "60 baguettes", status: "Pendiente" },
+                  { time: "3:00 PM", order: "ORD-2091", client: "Deli Express", items: "24 baguettes, 12 empanadas", status: "Pendiente" },
+                ].map((slot, i) => (
+                  <div key={i} className="flex items-center gap-4 p-3 rounded-lg border hover:bg-muted/30 transition-colors">
+                    <div className="text-xs font-mono font-semibold text-primary w-16 shrink-0">{slot.time}</div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold">{slot.order}</span>
+                        <span className="text-xs text-muted-foreground">— {slot.client}</span>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground truncate">{slot.items}</p>
+                    </div>
+                    <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full shrink-0 ${
+                      slot.status === "En preparación" ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"
+                    }`}>{slot.status}</span>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </DashboardLayout>
+  );
 }
