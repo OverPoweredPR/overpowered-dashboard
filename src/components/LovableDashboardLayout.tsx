@@ -1,197 +1,180 @@
-import { useState, useEffect, ReactNode } from "react";
-import { useTheme } from "@/hooks/use-theme";
-import { useLocation, Link, useNavigate } from "react-router-dom";
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
-import { AppSidebar } from "@/components/AppSidebar";
+import { useState } from "react";
+import {
+  Home, Package, CreditCard, BarChart3, ShoppingCart,
+  FileText, Search, CheckCircle, LogOut, Settings, PieChart, Users, Truck, UserCheck, Wallet, ChefHat, Route, CalendarDays, Activity, Boxes, HelpCircle, Tag, BadgePercent, ScrollText, Bot, Lock
+} from "lucide-react";
+import { NavLink } from "@/components/NavLink";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Drawer, DrawerContent, DrawerTrigger } from "@/components/ui/drawer";
-import { NotificationCenter } from "@/components/NotificationCenter";
-import { Home, Package, CreditCard, MoreHorizontal, ShoppingCart, FileText, Shield, Scale, PieChart, Settings, Plus, X, Moon, Sun, BarChart3 } from "lucide-react";
-import { GlobalSearch } from "@/components/GlobalSearch";
-import { KeyboardShortcuts } from "@/components/KeyboardShortcuts";
-import { OnboardingTour } from "@/components/OnboardingTour";
+import { WhatsNewBadge } from "@/components/WhatsNew";
+import { UpgradeModal } from "@/components/UpgradeModal";
+import { useModuleGating, ALL_MODULES } from "@/hooks/use-module-gating";
+import {
+  Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent,
+  SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarHeader, SidebarFooter, useSidebar,
+} from "@/components/ui/sidebar";
+import { cn } from "@/lib/utils";
 
-const quickActions = [
-  { label: "Nueva Orden", emoji: "📦", url: "/ordenes" },
-  { label: "Subir Pago", emoji: "💳", url: "/pagos" },
-  { label: "Nueva Factura", emoji: "🧾", url: "/facturas" },
-  { label: "Nueva Compra", emoji: "🛒", url: "/compras" },
-];
+const iconMap: Record<string, any> = {
+  home: Home, ordenes: Package, pagos: CreditCard, inventario: BarChart3,
+  compras: ShoppingCart, facturas: FileText, auditoria: Search, resoluciones: CheckCircle,
+  clientes: Users, proveedores: Truck, empleados: UserCheck, finanzas: Wallet,
+  produccion: ChefHat, rutas: Route, calendario: CalendarDays, metricas: Activity,
+  "inventario-avanzado": Boxes, precios: Tag, descuentos: BadgePercent,
+  contratos: ScrollText, automatizaciones: Bot, reportes: PieChart,
+  soporte: HelpCircle, settings: Settings,
+};
 
-const mobileNavItems = [
-  { label: "Home", url: "/", icon: Home },
-  { label: "Órdenes", url: "/ordenes", icon: Package },
-  { label: "Pagos", url: "/pagos", icon: CreditCard },
-  { label: "Más", url: "__more__", icon: MoreHorizontal },
-];
+const badgeMap: Record<string, number> = { auditoria: 3 };
 
-const moreNavItems = [
-  { label: "Inventario", url: "/inventario", icon: BarChart3 },
-  { label: "Compras", url: "/compras", icon: ShoppingCart },
-  { label: "Facturas", url: "/facturas", icon: FileText },
-  { label: "Auditoría", url: "/auditoria", icon: Shield },
-  { label: "Resoluciones", url: "/resoluciones", icon: Scale },
-  { label: "Reportes", url: "/reportes", icon: PieChart },
-  { label: "Configuración", url: "/settings", icon: Settings },
-];
-
-export function DashboardLayout({ children }: { children: ReactNode }) {
+export function AppSidebar() {
+  const { state } = useSidebar();
+  const collapsed = state === "collapsed";
   const location = useLocation();
-  const [animating, setAnimating] = useState(false);
-  const [displayChildren, setDisplayChildren] = useState(children);
-  const [moreOpen, setMoreOpen] = useState(false);
-  const [fabOpen, setFabOpen] = useState(false);
   const navigate = useNavigate();
-  const { theme, toggleTheme } = useTheme();
+  const userEmail = localStorage.getItem("op_auth");
+  const tenantName = localStorage.getItem("op_tenant") || "Baguettes de PR";
+  const { isModuleEnabled, isModuleLocked } = useModuleGating();
+  const [upgradeModule, setUpgradeModule] = useState<string | null>(null);
 
-  // Close FAB on ESC
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setFabOpen(false);
-    };
-    if (fabOpen) {
-      document.addEventListener("keydown", onKey);
-      return () => document.removeEventListener("keydown", onKey);
+  const handleLogout = () => {
+    localStorage.removeItem("op_auth");
+    localStorage.removeItem("op_tenant");
+    navigate("/login");
+  };
+  // Split into enabled and locked
+  const enabledItems = ALL_MODULES.filter((m) => !isModuleLocked(m.id));
+  const lockedItems = ALL_MODULES.filter((m) => isModuleLocked(m.id));
+
+  const renderItem = (item: any, locked: boolean) => {
+    const Icon = iconMap[item.id] || Home;
+    const badge = badgeMap[item.id];
+    const isActive = item.url === "/" ? location.pathname === "/" : location.pathname.startsWith(item.url);
+
+    if (locked) {
+      return (
+        <SidebarMenuItem key={item.id}>
+          <SidebarMenuButton tooltip={`${item.label} 🔒`}>
+            <button
+              onClick={() => setUpgradeModule(item.label)}
+              className="flex items-center gap-3 px-3 py-2.5 rounded-lg w-full text-left opacity-40 cursor-pointer hover:opacity-60 transition-opacity"
+            >
+              <div className="relative shrink-0">
+                <Icon className="w-4 h-4" />
+                {!collapsed && <Lock className="w-2.5 h-2.5 absolute -bottom-0.5 -right-1 text-muted-foreground" />}
+              </div>
+              {!collapsed && <span className="font-medium text-sm text-muted-foreground">{item.label}</span>}
+            </button>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
+      );
     }
-  }, [fabOpen]);
 
-  useEffect(() => {
-    setAnimating(true);
-    const t = setTimeout(() => {
-      setDisplayChildren(children);
-      setAnimating(false);
-    }, 150);
-    return () => clearTimeout(t);
-  }, [location.pathname]);
-
-  useEffect(() => {
-    setDisplayChildren(children);
-  }, [children]);
+    return (
+      <SidebarMenuItem key={item.id}>
+        <SidebarMenuButton asChild isActive={isActive} tooltip={item.label}>
+          <NavLink
+            to={item.url}
+            end={item.url === "/"}
+            className="flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+            activeClassName="!bg-sidebar-primary !text-sidebar-primary-foreground hover:!bg-sidebar-primary hover:!text-sidebar-primary-foreground"
+          >
+            <div className="relative shrink-0">
+              <Icon className="w-4 h-4" />
+              {badge && badge > 0 && (
+                <span className="absolute -top-1.5 -right-2 w-4 h-4 rounded-full bg-destructive text-destructive-foreground text-[9px] font-bold flex items-center justify-center">
+                  {badge}
+                </span>
+              )}
+            </div>
+            {!collapsed && <span className="font-medium text-sm">{item.label}</span>}
+          </NavLink>
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+    );
+  };
 
   return (
-    <SidebarProvider>
-      <KeyboardShortcuts />
-      <OnboardingTour />
-      <div className="min-h-screen flex w-full">
-        <AppSidebar />
-        <div className="flex-1 flex flex-col min-w-0">
-          {/* Header */}
-          <header className="h-14 flex items-center border-b bg-card px-4 sticky top-0 z-20">
-            <SidebarTrigger className="mr-4" />
-            <div className="hidden sm:flex items-center gap-2 mr-3">
-              <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-              <span className="text-xs text-muted-foreground font-medium">Clover POS sincronizado</span>
+    <>
+      <Sidebar collapsible="icon" className="border-r-0">
+        <SidebarHeader className="p-4">
+          {!collapsed ? (
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-sidebar-primary flex items-center justify-center text-sidebar-primary-foreground font-bold text-sm">
+                OP
+              </div>
+              <div>
+                <p className="text-[11px] font-medium text-sidebar-primary uppercase tracking-wider">OverPowered</p>
+                <h2 className="font-bold text-sm text-sidebar-accent-foreground leading-tight">{tenantName}</h2>
+                {userEmail && (
+                  <p className="text-[10px] text-sidebar-foreground/40 truncate max-w-[140px]">{userEmail}</p>
+                )}
+              </div>
             </div>
-            <GlobalSearch />
-
-            {/* Theme Toggle */}
-            <Button variant="ghost" size="icon" onClick={toggleTheme} className="ml-auto hover:bg-muted active:scale-95 transition-all">
-              {theme === "dark" ? <Sun className="h-4.5 w-4.5" /> : <Moon className="h-4.5 w-4.5" />}
-            </Button>
-
-            <NotificationCenter />
-          </header>
-
-          {/* Main content with page transitions */}
-          <main className={`flex-1 p-4 md:p-6 overflow-auto pb-20 md:pb-6 transition-all duration-200 ${animating ? "opacity-0 translate-y-2" : "opacity-100 translate-y-0"}`}>
-            {displayChildren}
-          </main>
-
-          {/* Mobile bottom nav */}
-          <nav className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-card border-t flex items-center justify-around h-14 px-2">
-            {mobileNavItems.map((item) => {
-              if (item.url === "__more__") {
-                const isMoreActive = moreNavItems.some((m) => location.pathname === m.url);
-                return (
-                  <Drawer key="more" open={moreOpen} onOpenChange={setMoreOpen}>
-                    <DrawerTrigger asChild>
-                      <button
-                        className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-lg transition-all active:scale-95 ${
-                          isMoreActive ? "text-primary" : "text-muted-foreground hover:text-foreground"
-                        }`}
-                      >
-                        <MoreHorizontal className="h-5 w-5" />
-                        <span className="text-[10px] font-medium">{item.label}</span>
-                      </button>
-                    </DrawerTrigger>
-                    <DrawerContent className="bg-[#0F1117] border-[#1e2030]">
-                      <div className="p-4 pb-8">
-                        <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4 px-2">Más módulos</h3>
-                        <div className="grid grid-cols-2 gap-2">
-                          {moreNavItems.map((m) => {
-                            const active = location.pathname === m.url;
-                            return (
-                              <Link
-                                key={m.url}
-                                to={m.url}
-                                onClick={() => setMoreOpen(false)}
-                                className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all active:scale-95 ${
-                                  active
-                                    ? "bg-primary text-primary-foreground"
-                                    : "text-slate-300 hover:bg-[#1e2030]"
-                                }`}
-                              >
-                                <m.icon className="h-5 w-5" />
-                                <span className="text-sm font-medium">{m.label}</span>
-                              </Link>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    </DrawerContent>
-                  </Drawer>
-                );
-              }
-              const isActive = location.pathname === item.url;
-              return (
-                <Link
-                  key={item.url}
-                  to={item.url}
-                  className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-lg transition-all active:scale-95 ${
-                    isActive ? "text-primary" : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  <item.icon className="h-5 w-5" />
-                  <span className="text-[10px] font-medium">{item.label}</span>
-                </Link>
-              );
-            })}
-          </nav>
-          {/* Mobile FAB */}
-          <div data-tour="fab" className="md:hidden">
-            {fabOpen && (
-              <div
-                className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm transition-opacity"
-                onClick={() => setFabOpen(false)}
-              />
-            )}
-            <div className="fixed bottom-20 right-4 z-50 flex flex-col-reverse items-end gap-3">
-              {fabOpen && quickActions.map((action, i) => (
-                <button
-                  key={action.label}
-                  onClick={() => { setFabOpen(false); navigate(action.url); }}
-                  className="flex items-center gap-2 bg-card border rounded-full pl-4 pr-5 py-2.5 shadow-lg animate-fade-in"
-                  style={{ animationDelay: `${i * 50}ms`, animationFillMode: "backwards" }}
-                >
-                  <span className="text-lg">{action.emoji}</span>
-                  <span className="text-sm font-medium whitespace-nowrap">{action.label}</span>
-                </button>
-              ))}
+          ) : (
+            <div className="w-9 h-9 rounded-lg bg-sidebar-primary flex items-center justify-center text-sidebar-primary-foreground font-bold text-sm mx-auto">
+              OP
             </div>
-            <button
-              onClick={() => setFabOpen((v) => !v)}
-              className="fixed bottom-20 right-4 z-50 w-14 h-14 rounded-full shadow-xl flex items-center justify-center transition-all duration-200 active:scale-90"
-              style={{ backgroundColor: "#0F6E56" }}
-            >
-              {fabOpen ? (
-                <X className="h-6 w-6 text-white transition-transform duration-200 rotate-0" />
-              ) : (
-                <Plus className="h-6 w-6 text-white transition-transform duration-200" />
+          )}
+        </SidebarHeader>
+
+        <SidebarContent className="px-2">
+          <SidebarGroup>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {enabledItems.map((item: any) => renderItem(item, false))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+
+          {lockedItems.length > 0 && (
+            <SidebarGroup>
+              {!collapsed && (
+                <div className="px-3 py-1.5">
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground/50 font-medium">🔒 Requiere Pro</p>
+                </div>
               )}
-            </button>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {lockedItems.map((item: any) => renderItem(item, true))}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          )}
+
+          <div className="px-2 mt-2">
+            <WhatsNewBadge collapsed={collapsed} />
           </div>
-        </div>
-      </div>
-    </SidebarProvider>
+        </SidebarContent>
+
+        <SidebarFooter className="p-3">
+          {!collapsed ? (
+            <Button
+              variant="ghost"
+              className="w-full justify-start gap-2 text-sidebar-foreground/50 hover:text-sidebar-foreground hover:bg-sidebar-accent text-xs"
+              onClick={handleLogout}
+            >
+              <LogOut className="h-4 w-4" />
+              Cerrar sesión
+            </Button>
+          ) : (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="mx-auto text-sidebar-foreground/50 hover:text-sidebar-foreground"
+              onClick={handleLogout}
+            >
+              <LogOut className="h-4 w-4" />
+            </Button>
+          )}
+        </SidebarFooter>
+      </Sidebar>
+
+      <UpgradeModal
+        open={!!upgradeModule}
+        onOpenChange={() => setUpgradeModule(null)}
+        moduleName={upgradeModule || undefined}
+      />
+    </>
   );
 }

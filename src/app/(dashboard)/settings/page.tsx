@@ -1,4 +1,4 @@
-"use client";
+"use client"
 import { useState, useEffect } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -9,8 +9,9 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
-import { User, Bell, Puzzle, Palette, Save, RefreshCw, CheckCircle2, XCircle, Moon, Sun, Globe } from "lucide-react";
+import { User, Bell, Puzzle, Palette, Save, RefreshCw, CheckCircle2, XCircle, Moon, Sun, Globe, Crown, Lock, Sparkles } from "lucide-react";
 import { toast } from "sonner";
+import { useModuleGating, ALL_MODULES, type PlanTier } from "@/hooks/use-module-gating";
 
 interface Integration {
   name: string;
@@ -27,6 +28,8 @@ const initialIntegrations: Integration[] = [
 ];
 
 export default function Settings() {
+  const { plan, isModuleLocked, isModuleEnabled, toggleModule, setPlan } = useModuleGating();
+
   const [userEmail, setUserEmail] = useState("usuario@email.com");
   const [tenantName, setTenantName] = useState("Baguettes de PR");
 
@@ -88,6 +91,7 @@ export default function Settings() {
         <Tabs defaultValue="perfil" className="animate-fade-in">
           <TabsList className="w-full justify-start overflow-x-auto flex-nowrap">
             <TabsTrigger value="perfil" className="gap-1.5 text-xs"><User className="w-3.5 h-3.5" /> Perfil</TabsTrigger>
+            <TabsTrigger value="plan" className="gap-1.5 text-xs"><Crown className="w-3.5 h-3.5" /> Plan & Módulos</TabsTrigger>
             <TabsTrigger value="notificaciones" className="gap-1.5 text-xs"><Bell className="w-3.5 h-3.5" /> Notificaciones</TabsTrigger>
             <TabsTrigger value="integraciones" className="gap-1.5 text-xs"><Puzzle className="w-3.5 h-3.5" /> Integraciones</TabsTrigger>
             <TabsTrigger value="apariencia" className="gap-1.5 text-xs"><Palette className="w-3.5 h-3.5" /> Apariencia</TabsTrigger>
@@ -122,6 +126,86 @@ export default function Settings() {
                 <Button className="gap-2 bg-primary hover:bg-primary/90" onClick={() => handleSave("Perfil")}>
                   <Save className="w-4 h-4" /> Guardar perfil
                 </Button>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* ── Plan & Módulos ── */}
+          <TabsContent value="plan" className="mt-6 space-y-4 animate-fade-in">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Crown className="w-4 h-4 text-primary" /> Plan actual
+                </CardTitle>
+                <CardDescription>Gestiona tu suscripción y los módulos habilitados</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center gap-3">
+                  <span className="text-sm font-medium">Plan:</span>
+                  <Select value={plan} onValueChange={(v) => setPlan(v as PlanTier)}>
+                    <SelectTrigger className="w-40 h-9">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="basico">🥉 Básico</SelectItem>
+                      <SelectItem value="pro">⭐ Pro</SelectItem>
+                      <SelectItem value="enterprise">💎 Enterprise</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Badge className={plan === "basico" ? "bg-muted text-muted-foreground" : plan === "pro" ? "bg-primary/15 text-primary border-primary/30" : "bg-amber-500/15 text-amber-600 border-amber-500/30"} variant="outline">
+                    {plan === "basico" ? "Básico" : plan === "pro" ? "Pro" : "Enterprise"}
+                  </Badge>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {plan === "basico" ? "Acceso a 4 módulos esenciales. Upgrade para desbloquear todo." : plan === "pro" ? "Todos los módulos desbloqueados." : "Acceso completo con soporte premium."}
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Módulos</CardTitle>
+                <CardDescription>Habilita o deshabilita módulos según tu plan</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {ALL_MODULES.filter((m) => m.id !== "home" && m.id !== "settings").map((mod) => {
+                    const locked = isModuleLocked(mod.id);
+                    const enabled = isModuleEnabled(mod.id);
+                    return (
+                      <div
+                        key={mod.id}
+                        className={`flex items-center justify-between rounded-lg border p-3 transition-all ${locked ? "opacity-50 border-dashed" : "border-border"}`}
+                      >
+                        <div className="flex items-center gap-2">
+                          {locked && <Lock className="h-3.5 w-3.5 text-muted-foreground" />}
+                          <span className="text-sm font-medium text-foreground">{mod.label}</span>
+                          {locked && (
+                            <Badge variant="outline" className="text-[9px] border-0 bg-amber-500/10 text-amber-600">
+                              Requiere Pro
+                            </Badge>
+                          )}
+                          {mod.minPlan === "basico" && (
+                            <Badge variant="outline" className="text-[9px] border-0 bg-primary/10 text-primary">
+                              Básico
+                            </Badge>
+                          )}
+                        </div>
+                        {locked ? (
+                          <Button size="sm" variant="outline" className="text-xs h-7 gap-1" onClick={() => window.open("https://overpowered.pr", "_blank")}>
+                            <Sparkles className="h-3 w-3" /> Upgrade
+                          </Button>
+                        ) : (
+                          <Switch
+                            checked={enabled}
+                            onCheckedChange={() => toggleModule(mod.id)}
+                            disabled={mod.minPlan === "basico"}
+                          />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
