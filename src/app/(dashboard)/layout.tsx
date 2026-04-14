@@ -55,8 +55,8 @@ function NavLink({
         transition-colors duration-150
         ${
           active
-            ? 'bg-indigo-600 text-white'
-            : 'text-slate-300 hover:bg-slate-700 hover:text-white'
+            ? 'bg-primary text-white'
+            : 'text-slate-300 hover:bg-sidebar-accent hover:text-white'
         }
       `}
     >
@@ -72,7 +72,7 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
       {/* Logo / Brand */}
       <div className="flex items-center justify-between px-4 py-5 border-b border-slate-700">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-widest text-indigo-400">
+          <p className="text-xs font-semibold uppercase tracking-widest text-primary">
             OverPowered
           </p>
           <p className="text-base font-bold text-white leading-tight">
@@ -101,7 +101,7 @@ function Sidebar({ onClose }: { onClose?: () => void }) {
       <div className="px-3 py-4 border-t border-slate-700">
         <button
           className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm
-            text-slate-400 hover:bg-slate-700 hover:text-white transition-colors"
+            text-slate-400 hover:bg-sidebar-accent hover:text-white transition-colors"
         >
           <LogOut size={18} className="shrink-0" />
           Cerrar sesión
@@ -150,7 +150,7 @@ function Header({ onMenuClick }: { onMenuClick: () => void }) {
             onClick={() => setUserMenuOpen((v) => !v)}
             className="flex items-center gap-2 px-3 py-1.5 rounded-md hover:bg-slate-100 transition-colors"
           >
-            <div className="w-7 h-7 rounded-full bg-indigo-600 flex items-center justify-center text-white text-xs font-bold">
+            <div className="w-7 h-7 rounded-full bg-primary flex items-center justify-center text-white text-xs font-bold">
               JE
             </div>
             <span className="hidden sm:block text-sm font-medium text-slate-700">

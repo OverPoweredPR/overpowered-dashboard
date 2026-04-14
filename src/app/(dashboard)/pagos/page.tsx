@@ -9,10 +9,11 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { KanbanSkeleton } from "@/components/Skeletons";
-import { Camera, CheckCircle, AlertTriangle, CreditCard, Search, DollarSign, Clock as ClockIcon, XCircle } from "lucide-react";
+import { usePagos, useRefreshDashboard } from "@/hooks/useDashboard";
+import type { Pago } from "@/lib/api";
+import { Camera, CheckCircle, AlertTriangle, CreditCard, Search, DollarSign, Clock as ClockIcon, XCircle, AlertCircle, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 
-type PaymentMethod = "ATH Móvil" | "Transferencia" | "Efectivo" | "Tarjeta";
 type ColumnKey = "pendiente" | "evidencia" | "confirmado" | "rechazado";
 
 interface PaymentCard {
@@ -20,27 +21,49 @@ interface PaymentCard {
   client: string;
   amount: string;
   numAmount: number;
-  method: PaymentMethod;
+  method: string;
   createdAt: Date;
   column: ColumnKey;
 }
 
-const methodStyles: Record<PaymentMethod, string> = {
-  "ATH Móvil": "bg-primary/10 text-primary border-primary/30",
-  "Transferencia": "bg-info/10 text-info border-info/30",
-  "Efectivo": "bg-primary/15 text-primary border-primary/25",
-  "Tarjeta": "bg-muted text-muted-foreground border-border",
+const methodStyles: Record<string, string> = {
+  "ATH Móvil":    "bg-primary/10 text-primary border-primary/30",
+  "Transferencia":"bg-info/10 text-info border-info/30",
+  "Efectivo":     "bg-primary/15 text-primary border-primary/25",
+  "Tarjeta":      "bg-muted text-muted-foreground border-border",
+  "Cheque":       "bg-muted text-muted-foreground border-border",
 };
 
 const columnMeta: { key: ColumnKey; title: string; accent: string }[] = [
-  { key: "pendiente", title: "Pendiente Evidencia", accent: "bg-warning" },
-  { key: "evidencia", title: "Evidencia Subida", accent: "bg-info" },
-  { key: "confirmado", title: "Confirmado", accent: "bg-primary" },
-  { key: "rechazado", title: "Rechazado", accent: "bg-destructive" },
+  { key: "pendiente",  title: "Pendiente Evidencia", accent: "bg-warning" },
+  { key: "evidencia",  title: "En Revisión",          accent: "bg-info" },
+  { key: "confirmado", title: "Confirmado",           accent: "bg-primary" },
+  { key: "rechazado",  title: "Rechazado",            accent: "bg-destructive" },
 ];
 
+const methodLabels: Record<Pago["metodo_pago"], string> = {
+  efectivo:       "Efectivo",
+  transferencia:  "Transferencia",
+  tarjeta:        "Tarjeta",
+  cheque:         "Cheque",
+};
+
+function pagoToCard(pago: Pago, column: ColumnKey): PaymentCard {
+  return {
+    id:        pago.pago_id,
+    client:    pago.cliente.nombre,
+    numAmount: pago.monto,
+    amount:    `$${pago.monto.toLocaleString("en-US", { minimumFractionDigits: 2 })}`,
+    method:    methodLabels[pago.metodo_pago] ?? pago.metodo_pago,
+    createdAt: new Date(),
+    column,
+  };
+}
+
 const now = new Date();
-const hoursAgo = (h: number) => new Date(now.getTime() - h * 60 * 60 * 1000);
+function isOverdue(date: Date) {
+  return now.getTime() - date.getTime() > 24 * 60 * 60 * 1000;
+}
 
 function elapsedLabel(date: Date): string {
   const diff = now.getTime() - date.getTime();
@@ -48,23 +71,7 @@ function elapsedLabel(date: Date): string {
   if (mins < 60) return `hace ${mins}min`;
   const hrs = Math.floor(mins / 60);
   if (hrs < 24) return `hace ${hrs}h`;
-  const days = Math.floor(hrs / 24);
-  return `hace ${days}d`;
-}
-
-const initialCards: PaymentCard[] = [
-  { id: "ORD-401", client: "Hotel San Juan", amount: "$520.00", numAmount: 520, method: "ATH Móvil", createdAt: hoursAgo(2), column: "pendiente" },
-  { id: "ORD-398", client: "Café La Plaza", amount: "$178.50", numAmount: 178.5, method: "Transferencia", createdAt: hoursAgo(30), column: "pendiente" },
-  { id: "ORD-395", client: "Restaurante El Coquí", amount: "$245.00", numAmount: 245, method: "Efectivo", createdAt: hoursAgo(48), column: "pendiente" },
-  { id: "ORD-390", client: "Deli Boricua", amount: "$350.00", numAmount: 350, method: "ATH Móvil", createdAt: hoursAgo(5), column: "evidencia" },
-  { id: "ORD-388", client: "Bistro 787", amount: "$420.00", numAmount: 420, method: "Tarjeta", createdAt: hoursAgo(28), column: "evidencia" },
-  { id: "ORD-380", client: "Panadería Express", amount: "$198.00", numAmount: 198, method: "Transferencia", createdAt: hoursAgo(72), column: "confirmado" },
-  { id: "ORD-375", client: "Hotel Caribe", amount: "$610.00", numAmount: 610, method: "ATH Móvil", createdAt: hoursAgo(96), column: "confirmado" },
-  { id: "ORD-370", client: "Bar La Esquina", amount: "$89.00", numAmount: 89, method: "Efectivo", createdAt: hoursAgo(50), column: "rechazado" },
-];
-
-function isOverdue(date: Date) {
-  return now.getTime() - date.getTime() > 24 * 60 * 60 * 1000;
+  return `hace ${Math.floor(hrs / 24)}d`;
 }
 
 function sumByColumn(cards: PaymentCard[], col: ColumnKey) {
@@ -72,13 +79,25 @@ function sumByColumn(cards: PaymentCard[], col: ColumnKey) {
 }
 
 export default function Pagos() {
+  const { data, isPending, error, refetch } = usePagos();
+  const { refreshPagos } = useRefreshDashboard();
   const isMobile = useIsMobile();
-  const [cards, setCards] = useState<PaymentCard[]>(initialCards);
+  const [cards, setCards] = useState<PaymentCard[]>([]);
   const [pinModalCard, setPinModalCard] = useState<PaymentCard | null>(null);
   const [pin, setPin] = useState("");
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  useEffect(() => { const t = setTimeout(() => setLoading(false), 500); return () => clearTimeout(t); }, []);
+
+  // Sync cards from API data whenever it loads
+  useEffect(() => {
+    if (!data) return;
+    const mapped: PaymentCard[] = [
+      ...(data.columnas.pendiente   ?? []).map((p) => pagoToCard(p, "pendiente")),
+      ...(data.columnas.en_revision ?? []).map((p) => pagoToCard(p, "evidencia")),
+      ...(data.columnas.confirmado  ?? []).map((p) => pagoToCard(p, "confirmado")),
+      ...(data.columnas.rechazado   ?? []).map((p) => pagoToCard(p, "rechazado")),
+    ];
+    setCards(mapped);
+  }, [data]);
 
   const filteredCards = useMemo(() => {
     if (!search.trim()) return cards;
@@ -86,14 +105,30 @@ export default function Pagos() {
     return cards.filter((c) => c.id.toLowerCase().includes(q) || c.client.toLowerCase().includes(q));
   }, [cards, search]);
 
-  const totals = useMemo(() => ({
-    pendiente: sumByColumn(cards, "pendiente") + sumByColumn(cards, "evidencia"),
-    confirmado: sumByColumn(cards, "confirmado"),
-    rechazado: sumByColumn(cards, "rechazado"),
-  }), [cards]);
+  // Use API resumen for header totals when available, fall back to calculated
+  const totals = useMemo(() => {
+    if (data?.resumen) {
+      return {
+        pendiente:  data.resumen.total_pendiente,
+        confirmado: data.resumen.total_confirmado_hoy,
+        rechazado:  data.resumen.total_rechazado_hoy,
+      };
+    }
+    return {
+      pendiente:  sumByColumn(cards, "pendiente") + sumByColumn(cards, "evidencia"),
+      confirmado: sumByColumn(cards, "confirmado"),
+      rechazado:  sumByColumn(cards, "rechazado"),
+    };
+  }, [data, cards]);
 
   const moveCard = (id: string, to: ColumnKey) => {
     setCards((prev) => prev.map((c) => (c.id === id ? { ...c, column: to } : c)));
+  };
+
+  const handleRefresh = () => {
+    refreshPagos();
+    refetch();
+    toast.success("Pagos actualizados");
   };
 
   const handleUploadEvidence = (card: PaymentCard) => {
@@ -122,17 +157,32 @@ export default function Pagos() {
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        <div className="animate-fade-in">
-          <h1 className="page-title">Pagos</h1>
-          <p className="text-sm text-muted-foreground">Tablero de cobranza y seguimiento de pagos</p>
+        <div className="flex items-center justify-between animate-fade-in">
+          <div>
+            <h1 className="page-title">Pagos</h1>
+            <p className="text-sm text-muted-foreground">Tablero de cobranza y seguimiento de pagos</p>
+          </div>
+          {data && (
+            <button onClick={handleRefresh} className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors">
+              <RefreshCw size={13} /> Actualizar
+            </button>
+          )}
         </div>
+
+        {error && (
+          <div className="flex items-center gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3">
+            <AlertCircle size={16} className="text-destructive shrink-0" />
+            <p className="text-sm text-destructive flex-1">No se pudieron cargar los pagos: {error.message}</p>
+            <button onClick={() => refetch()} className="text-xs font-medium text-destructive hover:underline">Reintentar</button>
+          </div>
+        )}
 
         {/* Summary bar */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 animate-fade-in">
           <Card className="shadow-sm border-warning/30">
             <CardContent className="p-4 flex items-center gap-3">
               <div className="w-9 h-9 rounded-lg bg-warning/10 flex items-center justify-center">
-                <ClockIcon className="h-4.5 w-4.5 text-warning" />
+                <ClockIcon className="h-4 w-4 text-warning" />
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Total Pendiente</p>
@@ -143,7 +193,7 @@ export default function Pagos() {
           <Card className="shadow-sm border-primary/30">
             <CardContent className="p-4 flex items-center gap-3">
               <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center">
-                <DollarSign className="h-4.5 w-4.5 text-primary" />
+                <DollarSign className="h-4 w-4 text-primary" />
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Confirmado Hoy</p>
@@ -154,7 +204,7 @@ export default function Pagos() {
           <Card className="shadow-sm border-destructive/30">
             <CardContent className="p-4 flex items-center gap-3">
               <div className="w-9 h-9 rounded-lg bg-destructive/10 flex items-center justify-center">
-                <XCircle className="h-4.5 w-4.5 text-destructive" />
+                <XCircle className="h-4 w-4 text-destructive" />
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Total Rechazado</p>
@@ -175,7 +225,7 @@ export default function Pagos() {
           />
         </div>
 
-        {loading ? (
+        {isPending ? (
           <div className="overflow-x-auto -mx-4 px-4 pb-4 md:mx-0 md:px-0">
             <KanbanSkeleton columns={4} />
           </div>
@@ -214,7 +264,7 @@ export default function Pagos() {
                               <p className="font-medium text-sm">{card.client}</p>
                               <div className="flex items-center justify-between">
                                 <span className="text-lg font-bold">{card.amount}</span>
-                                <Badge variant="outline" className={`text-[10px] px-2 py-0.5 ${methodStyles[card.method]}`}>{card.method}</Badge>
+                                <Badge variant="outline" className={`text-[10px] px-2 py-0.5 ${methodStyles[card.method] ?? ""}`}>{card.method}</Badge>
                               </div>
                               <p className="text-[10px] text-muted-foreground/70 flex items-center gap-1">
                                 <ClockIcon className="w-3 h-3" /> {elapsedLabel(card.createdAt)}
@@ -274,7 +324,7 @@ export default function Pagos() {
                                   <p className="font-medium text-sm leading-tight">{card.client}</p>
                                   <div className="flex items-center justify-between">
                                     <span className="text-lg font-bold">{card.amount}</span>
-                                    <Badge variant="outline" className={`text-[10px] px-2 py-0.5 ${methodStyles[card.method]}`}>{card.method}</Badge>
+                                    <Badge variant="outline" className={`text-[10px] px-2 py-0.5 ${methodStyles[card.method] ?? ""}`}>{card.method}</Badge>
                                   </div>
                                   <p className="text-[10px] text-muted-foreground/70 flex items-center gap-1">
                                     <ClockIcon className="w-3 h-3" /> {elapsedLabel(card.createdAt)}
