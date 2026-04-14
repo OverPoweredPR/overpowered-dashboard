@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { TableSkeleton } from "@/components/Skeletons";
 import { EmptyState } from "@/components/EmptyState";
-import { Search, AlertTriangle, Package, ChevronDown, CheckCircle2, BarChart3 } from "lucide-react";
+import { Search, AlertTriangle, Package, ChevronDown, CheckCircle2, BarChart3, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 
 interface Product { sku: string; name: string; stock: number; min: number; updatedAt: string; }
@@ -44,9 +44,36 @@ const reconHistory: ReconRecord[] = [
 ];
 
 function getStatus(stock: number, min: number) {
-  if (stock === 0) return { dot: "bg-destructive", label: "Sin stock" };
-  if (stock <= min) return { dot: "bg-warning", label: "Bajo" };
-  return { dot: "bg-primary", label: "Normal" };
+  if (stock === 0) return { dot: "bg-destructive", label: "Sin stock", pulse: true };
+  if (stock <= min) return { dot: "bg-warning", label: "Bajo", pulse: false };
+  return { dot: "bg-primary", label: "Normal", pulse: false };
+}
+
+function ReconTrendChart({ data }: { data: ReconRecord[] }) {
+  const reversed = [...data].reverse();
+  const w = 220, h = 60, px = 10, py = 8;
+  const maxTotal = Math.max(...reversed.map(r => r.total), 1);
+  const xStep = (w - px * 2) / (reversed.length - 1);
+
+  const points = reversed.map((r, i) => ({
+    x: px + i * xStep,
+    y: py + (1 - r.total / maxTotal) * (h - py * 2),
+    errors: r.errors,
+  }));
+
+  const line = points.map(p => `${p.x},${p.y}`).join(" ");
+
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} className="w-full max-w-[220px] h-[60px]">
+      <polyline fill="none" stroke="hsl(var(--primary))" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" points={line} />
+      {points.map((p, i) => (
+        <g key={i}>
+          <circle cx={p.x} cy={p.y} r="3" fill="hsl(var(--primary))" />
+          {p.errors > 0 && <circle cx={p.x} cy={p.y} r="4" fill="hsl(var(--destructive))" stroke="hsl(var(--destructive))" strokeWidth="1" />}
+        </g>
+      ))}
+    </svg>
+  );
 }
 
 export default function Inventario() {
@@ -57,6 +84,9 @@ export default function Inventario() {
   const [adjustReason, setAdjustReason] = useState("");
   const [reconOpen, setReconOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
+  const [lastSynced, setLastSynced] = useState(new Date());
+
   useEffect(() => { const t = setTimeout(() => setLoading(false), 500); return () => clearTimeout(t); }, []);
 
   const zeroStockProducts = products.filter((p) => p.stock === 0);
@@ -64,9 +94,23 @@ export default function Inventario() {
     (p) => p.name.toLowerCase().includes(search.toLowerCase()) || p.sku.toLowerCase().includes(search.toLowerCase())
   );
 
+  const handleSync = () => {
+    setSyncing(true);
+    setTimeout(() => {
+      setSyncing(false);
+      setLastSynced(new Date());
+      toast.success("Sincronización con Shopify completada");
+    }, 1500);
+  };
+
   const handleAcknowledge = (id: string) => {
     setDiscrepancies((prev) => prev.map((d) => (d.id === id ? { ...d, acknowledged: true } : d)));
     toast.success("Discrepancia reconocida");
+  };
+
+  const handleAcknowledgeAll = () => {
+    setDiscrepancies((prev) => prev.map((d) => ({ ...d, acknowledged: true })));
+    toast.success("Todas las discrepancias reconocidas");
   };
 
   const handleAdjust = () => {
@@ -78,17 +122,34 @@ export default function Inventario() {
     }
   };
 
+  const pendingDiscrepancies = discrepancies.filter(d => !d.acknowledged).length;
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 animate-fade-in">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 animate-fade-in">
           <div>
             <h1 className="page-title">Inventario</h1>
             <p className="text-sm text-muted-foreground">Control de materias primas y reconciliación</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Última sincronización: {lastSynced.toLocaleTimeString("es-PR", { hour: "2-digit", minute: "2-digit" })}
+            </p>
           </div>
-          <div className="relative w-full sm:w-64">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input placeholder="Buscar SKU o producto..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2 text-xs hover:bg-primary/10 hover:border-primary/30 hover:text-primary active:scale-95 transition-all"
+              onClick={handleSync}
+              disabled={syncing}
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${syncing ? "animate-spin" : ""}`} />
+              {syncing ? "Sincronizando..." : "Sync with Shopify"}
+            </Button>
+            <div className="relative w-full sm:w-64">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input placeholder="Buscar SKU o producto..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
+            </div>
           </div>
         </div>
 
@@ -133,7 +194,7 @@ export default function Inventario() {
                           <td className="p-4 text-muted-foreground hidden md:table-cell">{p.min}</td>
                           <td className="p-4">
                             <div className="flex items-center gap-2">
-                              <div className={`w-2.5 h-2.5 rounded-full ${st.dot}`} />
+                              <div className={`w-2.5 h-2.5 rounded-full ${st.dot} ${st.pulse ? "animate-pulse" : ""}`} />
                               <span className="text-xs font-medium">{st.label}</span>
                             </div>
                           </td>
@@ -158,7 +219,12 @@ export default function Inventario() {
           <CardHeader className="pb-3">
             <CardTitle className="section-label normal-case tracking-normal text-base flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 text-warning" /> Discrepancias Shopify vs Airtable
-              <Badge variant="outline" className="ml-auto text-[10px] px-2 py-0.5">{discrepancies.filter((d) => !d.acknowledged).length} pendientes</Badge>
+              <Badge variant="outline" className="ml-auto text-[10px] px-2 py-0.5">{pendingDiscrepancies} pendientes</Badge>
+              {pendingDiscrepancies > 0 && (
+                <Button variant="outline" size="sm" className="text-xs hover:bg-primary/10 hover:border-primary/30 active:scale-95 transition-all" onClick={handleAcknowledgeAll}>
+                  Reconocer todas
+                </Button>
+              )}
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
@@ -210,7 +276,10 @@ export default function Inventario() {
               <CardHeader className="cursor-pointer hover:bg-muted/30 transition-colors pb-3">
                 <CardTitle className="text-base flex items-center gap-2">
                   Historial de Reconciliación (7 noches)
-                  <ChevronDown className={`w-4 h-4 ml-auto transition-transform duration-200 ${reconOpen ? "rotate-180" : ""}`} />
+                  <div className="ml-auto flex items-center gap-3">
+                    <ReconTrendChart data={reconHistory} />
+                    <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${reconOpen ? "rotate-180" : ""}`} />
+                  </div>
                 </CardTitle>
               </CardHeader>
             </CollapsibleTrigger>
