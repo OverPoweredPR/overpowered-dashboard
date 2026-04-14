@@ -1,13 +1,12 @@
-import { useState, useEffect, useCallback, ReactNode } from "react";
+import { useState, useEffect, ReactNode } from "react";
 import { useTheme } from "@/hooks/use-theme";
 import { useLocation, Link, useNavigate } from "react-router-dom";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Drawer, DrawerContent, DrawerTrigger, DrawerClose } from "@/components/ui/drawer";
-import { Bell, Home, Package, CreditCard, BarChart3, AlertTriangle, Info, XCircle, ShoppingCart, FileText, Shield, Scale, MoreHorizontal, PieChart, Settings, Plus, X, Moon, Sun } from "lucide-react";
+import { Drawer, DrawerContent, DrawerTrigger } from "@/components/ui/drawer";
+import { NotificationCenter } from "@/components/NotificationCenter";
+import { Home, Package, CreditCard, MoreHorizontal, ShoppingCart, FileText, Shield, Scale, PieChart, Settings, Plus, X, Moon, Sun, BarChart3 } from "lucide-react";
 import { GlobalSearch } from "@/components/GlobalSearch";
 import { KeyboardShortcuts } from "@/components/KeyboardShortcuts";
 import { OnboardingTour } from "@/components/OnboardingTour";
@@ -18,21 +17,6 @@ const quickActions = [
   { label: "Nueva Factura", emoji: "🧾", url: "/facturas" },
   { label: "Nueva Compra", emoji: "🛒", url: "/compras" },
 ];
-
-const recentAlerts = [
-  { id: 1, message: "Stock cero: Huevos — reabastecimiento requerido", severity: "error", time: "Hace 5 min" },
-  { id: 2, message: "Pago ORD-398 vencido +24h — Café La Plaza", severity: "warning", time: "Hace 12 min" },
-  { id: 3, message: "Reconciliación nocturna completada", severity: "info", time: "Hace 2 hr" },
-  { id: 4, message: "Precio de mantequilla aumentó 8%", severity: "warning", time: "Hace 3 hr" },
-  { id: 5, message: "Clover POS sincronizado — 23 transacciones", severity: "info", time: "Hace 4 hr" },
-];
-
-const severityIcon: Record<string, typeof XCircle> = { error: XCircle, warning: AlertTriangle, info: Info };
-const severityStyle: Record<string, string> = {
-  error: "text-destructive",
-  warning: "text-warning",
-  info: "text-info",
-};
 
 const mobileNavItems = [
   { label: "Home", url: "/", icon: Home },
@@ -55,12 +39,10 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
   const location = useLocation();
   const [animating, setAnimating] = useState(false);
   const [displayChildren, setDisplayChildren] = useState(children);
-  const [notifOpen, setNotifOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const [fabOpen, setFabOpen] = useState(false);
   const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
-  const unread = recentAlerts.filter((a) => a.severity === "error" || a.severity === "warning").length;
 
   // Close FAB on ESC
   useEffect(() => {
@@ -107,43 +89,7 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
               {theme === "dark" ? <Sun className="h-4.5 w-4.5" /> : <Moon className="h-4.5 w-4.5" />}
             </Button>
 
-            {/* Notification Bell */}
-            <Popover open={notifOpen} onOpenChange={setNotifOpen}>
-              <PopoverTrigger asChild>
-                <Button variant="ghost" size="icon" className="relative hover:bg-muted active:scale-95 transition-all">
-                  <Bell className="h-4.5 w-4.5" />
-                  {unread > 0 && (
-                    <span className="absolute -top-0.5 -right-0.5 w-4.5 h-4.5 rounded-full bg-destructive text-destructive-foreground text-[10px] font-bold flex items-center justify-center">
-                      {unread}
-                    </span>
-                  )}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-80 p-0" align="end">
-                <div className="p-3 border-b">
-                  <h4 className="font-semibold text-sm">Notificaciones</h4>
-                </div>
-                <div className="max-h-72 overflow-y-auto">
-                  {recentAlerts.map((a) => {
-                    const Icon = severityIcon[a.severity];
-                    return (
-                      <div key={a.id} className="flex items-start gap-3 p-3 border-b last:border-0 hover:bg-muted/50 transition-colors">
-                        <Icon className={`h-4 w-4 mt-0.5 shrink-0 ${severityStyle[a.severity]}`} />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-medium leading-snug">{a.message}</p>
-                          <p className="text-[10px] text-muted-foreground mt-0.5">{a.time}</p>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-                <div className="p-2 border-t">
-                  <Button variant="ghost" size="sm" className="w-full text-xs hover:bg-muted active:scale-[0.98] transition-all" asChild>
-                    <Link to="/auditoria" onClick={() => setNotifOpen(false)}>Ver todas las alertas</Link>
-                  </Button>
-                </div>
-              </PopoverContent>
-            </Popover>
+            <NotificationCenter />
           </header>
 
           {/* Main content with page transitions */}
