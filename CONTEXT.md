@@ -421,6 +421,6 @@ auditoria, resoluciones, reportes, settings
 
 ## Módulos adicionales — sesión tarde
 - Rutas ✅ /rutas — en producción
-- Calendario ⏳ /calendario — en deploy
+- Calendario ✅ /calendario — en producción
 - Métricas ⏳ /metricas — en Lovable
 - Producción ✅ /produccion — en producción
