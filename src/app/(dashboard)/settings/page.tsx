@@ -1,3 +1,4 @@
+"use client";
 import { useState } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -26,8 +27,8 @@ const initialIntegrations: Integration[] = [
 ];
 
 export default function Settings() {
-  const userEmail = localStorage.getItem("op_auth") || "usuario@email.com";
-  const tenantName = localStorage.getItem("op_tenant") || "Baguettes de PR";
+  const userEmail = typeof window !== "undefined" ? (localStorage.getItem("op_auth") || "usuario@email.com") : "usuario@email.com";
+  const tenantName = typeof window !== "undefined" ? (localStorage.getItem("op_tenant") || "Baguettes de PR") : "Baguettes de PR";
 
   // Perfil
   const [name, setName] = useState("Admin Principal");
