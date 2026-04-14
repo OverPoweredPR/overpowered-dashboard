@@ -374,3 +374,19 @@ Todos activos en localhost:5678. Stack completo operativo.
 - ~326 ejecuciones en sesión de hoy
 - Ritmo: ~9,780/mes vs límite 10,000
 - Sin anomalías detectadas
+
+## Módulos adicionales — 2026-04-14 tarde
+
+### Nuevos módulos
+- Clientes — grid cards, drawer detalle ✅
+- Settings — perfil, notificaciones, integraciones ✅  
+- Reportes — KPIs, charts SVG ✅
+
+### Features globales
+- NotificationCenter — drawer, 4 categorías ✅
+- OnboardingTour — 5 pasos, confetti ✅
+- Dark/light mode toggle ✅
+- FAB móvil — 4 acciones rápidas ✅
+- GlobalSearch — header search ✅
+- Keyboard shortcuts G+H/O/P/I ✅
+- Pull-to-refresh — Home y Órdenes ✅
