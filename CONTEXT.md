@@ -285,3 +285,11 @@ Todos activos en localhost:5678. Stack completo operativo.
 2. Verificar en local
 3. Activar en local
 4. Nunca los dos activos simultáneamente
+
+## Optimización Pendiente — WF1/WF6 (2026-04-14)
+- WF6 consume ~200-400 ejecuciones/día
+- Patrón: ráfagas de 2-3 por recepción de PO
+- Fix recomendado: batch updates en WF1 antes
+  de llamar WF6 — agrupa productos por evento
+- Prioridad: Alta — proyección 19,600 exec/mes
+  vs límite 10,000
