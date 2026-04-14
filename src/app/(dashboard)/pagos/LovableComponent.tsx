@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { Card, CardContent } from "@/components/ui/card";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -70,6 +71,7 @@ function sumByColumn(cards: PaymentCard[], col: ColumnKey) {
 }
 
 export default function Pagos() {
+  const isMobile = useIsMobile();
   const [cards, setCards] = useState<PaymentCard[]>(initialCards);
   const [pinModalCard, setPinModalCard] = useState<PaymentCard | null>(null);
   const [pin, setPin] = useState("");
@@ -177,74 +179,128 @@ export default function Pagos() {
             <KanbanSkeleton columns={4} />
           </div>
         ) : (
-          <div className="overflow-x-auto -mx-4 px-4 pb-4 md:mx-0 md:px-0">
-            <div className="flex gap-4 min-w-[900px] xl:grid xl:grid-cols-4 xl:min-w-0">
+          <>
+          {isMobile ? (
+            <div className="space-y-6">
               {columnMeta.map((col) => {
                 const colCards = filteredCards.filter((c) => c.column === col.key);
                 return (
-                  <div key={col.key} className="flex-1 min-w-[220px] space-y-3 animate-fade-in">
+                  <div key={col.key} className="space-y-2 animate-fade-in">
                     <div className="flex items-center gap-2 sticky top-0 bg-background py-1 z-10">
                       <div className={`w-3 h-3 rounded-full ${col.accent}`} />
-                      <h3 className="section-label normal-case tracking-normal text-sm font-semibold">{col.title}</h3>
-                      <span className="ml-auto shrink-0 text-xs font-bold bg-muted rounded-full w-6 h-6 flex items-center justify-center">
-                        {colCards.length}
-                      </span>
+                      <h3 className="text-sm font-semibold">{col.title}</h3>
+                      <span className="ml-auto text-xs font-bold bg-muted rounded-full w-6 h-6 flex items-center justify-center">{colCards.length}</span>
                     </div>
-
-                    <div className="space-y-2">
-                      {colCards.length === 0 ? (
-                        <div className="border border-dashed rounded-lg p-8 text-center">
-                          <CreditCard className="w-6 h-6 text-muted-foreground mx-auto mb-2" />
-                          <p className="text-xs text-muted-foreground">Sin pagos</p>
-                        </div>
-                      ) : (
-                        colCards.map((card) => {
-                          const overdue = isOverdue(card.createdAt);
-                          return (
-                            <Card key={card.id} className={`shadow-sm transition-all duration-200 hover:shadow-md ${overdue ? "border-destructive/70 border-2" : ""}`}>
-                              <CardContent className="p-4 space-y-3">
-                                <div className="flex items-start justify-between gap-2">
-                                  <span className="text-xs font-mono text-muted-foreground">{card.id}</span>
-                                  <div className="flex items-center gap-1.5 shrink-0">
+                    {colCards.length === 0 ? (
+                      <div className="border border-dashed rounded-lg p-6 text-center">
+                        <CreditCard className="w-5 h-5 text-muted-foreground mx-auto mb-1" />
+                        <p className="text-xs text-muted-foreground">Sin pagos</p>
+                      </div>
+                    ) : (
+                      colCards.map((card) => {
+                        const overdue = isOverdue(card.createdAt);
+                        return (
+                          <Card key={card.id} className={`shadow-sm ${overdue ? "border-destructive/70 border-2" : ""}`}>
+                            <CardContent className="p-4 space-y-2">
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs font-mono text-muted-foreground">{card.id}</span>
+                                {overdue && (
+                                  <Badge variant="destructive" className="text-[10px] px-1.5 py-0 gap-1">
+                                    <AlertTriangle className="w-3 h-3" /> +24h
+                                  </Badge>
+                                )}
+                              </div>
+                              <p className="font-medium text-sm">{card.client}</p>
+                              <div className="flex items-center justify-between">
+                                <span className="text-lg font-bold">{card.amount}</span>
+                                <Badge variant="outline" className={`text-[10px] px-2 py-0.5 ${methodStyles[card.method]}`}>{card.method}</Badge>
+                              </div>
+                              <p className="text-[10px] text-muted-foreground/70 flex items-center gap-1">
+                                <ClockIcon className="w-3 h-3" /> {elapsedLabel(card.createdAt)}
+                              </p>
+                              {col.key === "pendiente" && (
+                                <Button size="sm" className="w-full gap-2 bg-primary hover:bg-primary/90" onClick={() => handleUploadEvidence(card)}>
+                                  <Camera className="w-4 h-4" /> Subir Evidencia
+                                </Button>
+                              )}
+                              {col.key === "evidencia" && (
+                                <Button size="sm" className="w-full gap-2 bg-primary hover:bg-primary/90" onClick={() => { setPinModalCard(card); setPin(""); }}>
+                                  <CheckCircle className="w-4 h-4" /> Confirmar Pago
+                                </Button>
+                              )}
+                            </CardContent>
+                          </Card>
+                        );
+                      })
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            /* Desktop: horizontal kanban */
+            <div className="overflow-x-auto -mx-4 px-4 pb-4 md:mx-0 md:px-0">
+              <div className="flex gap-4 min-w-[900px] xl:grid xl:grid-cols-4 xl:min-w-0">
+                {columnMeta.map((col) => {
+                  const colCards = filteredCards.filter((c) => c.column === col.key);
+                  return (
+                    <div key={col.key} className="flex-1 min-w-[220px] space-y-3 animate-fade-in">
+                      <div className="flex items-center gap-2 sticky top-0 bg-background py-1 z-10">
+                        <div className={`w-3 h-3 rounded-full ${col.accent}`} />
+                        <h3 className="section-label normal-case tracking-normal text-sm font-semibold">{col.title}</h3>
+                        <span className="ml-auto shrink-0 text-xs font-bold bg-muted rounded-full w-6 h-6 flex items-center justify-center">{colCards.length}</span>
+                      </div>
+                      <div className="space-y-2">
+                        {colCards.length === 0 ? (
+                          <div className="border border-dashed rounded-lg p-8 text-center">
+                            <CreditCard className="w-6 h-6 text-muted-foreground mx-auto mb-2" />
+                            <p className="text-xs text-muted-foreground">Sin pagos</p>
+                          </div>
+                        ) : (
+                          colCards.map((card) => {
+                            const overdue = isOverdue(card.createdAt);
+                            return (
+                              <Card key={card.id} className={`shadow-sm transition-all duration-200 hover:shadow-md ${overdue ? "border-destructive/70 border-2" : ""}`}>
+                                <CardContent className="p-4 space-y-3">
+                                  <div className="flex items-start justify-between gap-2">
+                                    <span className="text-xs font-mono text-muted-foreground">{card.id}</span>
                                     {overdue && (
                                       <Badge variant="destructive" className="text-[10px] px-1.5 py-0 gap-1">
                                         <AlertTriangle className="w-3 h-3" /> +24h
                                       </Badge>
                                     )}
                                   </div>
-                                </div>
-                                <p className="font-medium text-sm leading-tight">{card.client}</p>
-                                <div className="flex items-center justify-between">
-                                  <span className="text-lg font-bold">{card.amount}</span>
-                                  <Badge variant="outline" className={`text-[10px] px-2 py-0.5 ${methodStyles[card.method]}`}>
-                                    {card.method}
-                                  </Badge>
-                                </div>
-                                <p className="text-[10px] text-muted-foreground/70 flex items-center gap-1">
-                                  <ClockIcon className="w-3 h-3" /> {elapsedLabel(card.createdAt)}
-                                </p>
-
-                                {col.key === "pendiente" && (
-                                  <Button size="sm" className="w-full gap-2 bg-primary hover:bg-primary/90 active:scale-[0.97] transition-all" onClick={() => handleUploadEvidence(card)}>
-                                    <Camera className="w-4 h-4" /> Subir Evidencia
-                                  </Button>
-                                )}
-                                {col.key === "evidencia" && (
-                                  <Button size="sm" className="w-full gap-2 bg-primary hover:bg-primary/90 active:scale-[0.97] transition-all" onClick={() => { setPinModalCard(card); setPin(""); }}>
-                                    <CheckCircle className="w-4 h-4" /> Confirmar Pago
-                                  </Button>
-                                )}
-                              </CardContent>
-                            </Card>
-                          );
-                        })
-                      )}
+                                  <p className="font-medium text-sm leading-tight">{card.client}</p>
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-lg font-bold">{card.amount}</span>
+                                    <Badge variant="outline" className={`text-[10px] px-2 py-0.5 ${methodStyles[card.method]}`}>{card.method}</Badge>
+                                  </div>
+                                  <p className="text-[10px] text-muted-foreground/70 flex items-center gap-1">
+                                    <ClockIcon className="w-3 h-3" /> {elapsedLabel(card.createdAt)}
+                                  </p>
+                                  {col.key === "pendiente" && (
+                                    <Button size="sm" className="w-full gap-2 bg-primary hover:bg-primary/90 active:scale-[0.97] transition-all" onClick={() => handleUploadEvidence(card)}>
+                                      <Camera className="w-4 h-4" /> Subir Evidencia
+                                    </Button>
+                                  )}
+                                  {col.key === "evidencia" && (
+                                    <Button size="sm" className="w-full gap-2 bg-primary hover:bg-primary/90 active:scale-[0.97] transition-all" onClick={() => { setPinModalCard(card); setPin(""); }}>
+                                      <CheckCircle className="w-4 h-4" /> Confirmar Pago
+                                    </Button>
+                                  )}
+                                </CardContent>
+                              </Card>
+                            );
+                          })
+                        )}
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          )}
+          </>
         )}
       </div>
 

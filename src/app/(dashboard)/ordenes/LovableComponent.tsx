@@ -1,10 +1,13 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { TableSkeleton } from "@/components/Skeletons";
 import { EmptyState } from "@/components/EmptyState";
-import { Search, Package } from "lucide-react";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { usePullRefresh } from "@/hooks/use-pull-refresh";
+import { Search, Package, RefreshCw } from "lucide-react";
+import { toast } from "sonner";
 
 const statusStyles: Record<string, string> = {
   "Entregada": "bg-success/10 text-success border-success/20",
@@ -26,6 +29,15 @@ const orders = [
 export default function Ordenes() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const isMobile = useIsMobile();
+
+  const handleRefresh = useCallback(async () => {
+    await new Promise((r) => setTimeout(r, 800));
+    toast.success("Órdenes actualizadas");
+  }, []);
+
+  const { containerRef, pullDistance, refreshing } = usePullRefresh({ onRefresh: handleRefresh });
+
   useEffect(() => { const t = setTimeout(() => setLoading(false), 500); return () => clearTimeout(t); }, []);
 
   const filtered = orders.filter((o) =>
@@ -34,7 +46,14 @@ export default function Ordenes() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
+      <div ref={containerRef} className="space-y-6">
+        {/* Pull indicator */}
+        {(pullDistance > 0 || refreshing) && (
+          <div className="flex justify-center -mt-2 mb-2 md:hidden">
+            <RefreshCw className={`w-5 h-5 text-primary transition-transform ${refreshing ? "animate-spin" : ""}`} style={{ transform: `rotate(${pullDistance * 3}deg)` }} />
+          </div>
+        )}
+
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 animate-fade-in">
           <div>
             <h1 className="page-title">Órdenes</h1>
@@ -50,6 +69,26 @@ export default function Ordenes() {
           <TableSkeleton rows={6} cols={5} />
         ) : filtered.length === 0 ? (
           <EmptyState icon={<Package className="w-7 h-7 text-muted-foreground" />} title="Sin órdenes" description="No se encontraron órdenes con ese criterio de búsqueda." />
+        ) : isMobile ? (
+          /* Mobile card view */
+          <div className="space-y-3 animate-fade-in">
+            {filtered.map((o) => (
+              <Card key={o.id} className="shadow-sm">
+                <CardContent className="p-4 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-foreground">{o.id}</span>
+                    <span className={`inline-flex px-2.5 py-1 rounded-full text-[11px] font-medium border ${statusStyles[o.status]}`}>{o.status}</span>
+                  </div>
+                  <p className="text-sm font-medium">{o.client}</p>
+                  <p className="text-xs text-muted-foreground">{o.items}</p>
+                  <div className="flex items-center justify-between pt-1">
+                    <span className="font-semibold">{o.total}</span>
+                    <span className="text-xs text-muted-foreground">{o.date}</span>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
         ) : (
           <Card className="overflow-hidden shadow-sm animate-fade-in">
             <CardContent className="p-0">
@@ -73,9 +112,7 @@ export default function Ordenes() {
                         <td className="p-4 text-muted-foreground hidden md:table-cell">{o.items}</td>
                         <td className="p-4 font-semibold">{o.total}</td>
                         <td className="p-4">
-                          <span className={`inline-flex px-2.5 py-1 rounded-full text-[11px] font-medium border ${statusStyles[o.status]}`}>
-                            {o.status}
-                          </span>
+                          <span className={`inline-flex px-2.5 py-1 rounded-full text-[11px] font-medium border ${statusStyles[o.status]}`}>{o.status}</span>
                         </td>
                         <td className="p-4 text-muted-foreground hidden sm:table-cell">{o.date}</td>
                       </tr>

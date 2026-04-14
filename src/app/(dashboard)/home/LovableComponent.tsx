@@ -3,6 +3,7 @@ import { DashboardLayout } from "@/components/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { StatCardsSkeleton } from "@/components/Skeletons";
+import { usePullRefresh } from "@/hooks/use-pull-refresh";
 import { Package, DollarSign, Clock, AlertTriangle, Plus, RefreshCw, FileText, ShoppingCart, Upload, CheckCheck, ClipboardCheck } from "lucide-react";
 import { toast } from "sonner";
 
@@ -84,6 +85,14 @@ export default function Index() {
 
   useEffect(() => { const cleanup = loadData(); return cleanup; }, [loadData]);
 
+  const handlePullRefresh = useCallback(async () => {
+    await new Promise((r) => setTimeout(r, 800));
+    setLastUpdated(new Date());
+    toast.success("Dashboard actualizado");
+  }, []);
+
+  const { containerRef, pullDistance, refreshing: pullRefreshing } = usePullRefresh({ onRefresh: handlePullRefresh });
+
   const handleRefresh = () => {
     setRefreshing(true);
     loadData();
@@ -95,7 +104,13 @@ export default function Index() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
+      <div ref={containerRef} className="space-y-6">
+        {/* Pull indicator */}
+        {(pullDistance > 0 || pullRefreshing) && (
+          <div className="flex justify-center -mt-2 mb-2 md:hidden">
+            <RefreshCw className={`w-5 h-5 text-primary transition-transform ${pullRefreshing ? "animate-spin" : ""}`} style={{ transform: `rotate(${pullDistance * 3}deg)` }} />
+          </div>
+        )}
         <div className="animate-fade-in flex items-start justify-between gap-4">
           <div>
             <h1 className="page-title">Buenos días ☀️</h1>
